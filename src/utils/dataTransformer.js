@@ -7,8 +7,8 @@
  */
 export const parsePhoneNumbers = (telString) => {
   if (!telString) return { phone: "", mobile: "" };
-  
-  const phones = telString.split(/[;\/,]/).map(p => p.trim()).filter(p => p);
+
+  const phones = telString.split(/[;/,]/).map(p => p.trim()).filter(p => p);
   return {
     phone: phones[0] || "",
     mobile: phones[1] || ""
@@ -20,15 +20,15 @@ export const parsePhoneNumbers = (telString) => {
  */
 export const determineCustomerType = (size) => {
   if (!size) return "";
-  
+
   const sizeUpper = size.toUpperCase().trim();
-  
+
   if (sizeUpper === "FC") return "대형광고주";
   if (sizeUpper.includes("1/2")) return "중형광고주";
   if (sizeUpper.includes("1/4")) return "소형광고주";
   if (sizeUpper.includes("YELLOW")) return "옐로우페이지";
   if (sizeUpper.includes("FLEA")) return "프리마켓";
-  
+
   return "기타";
 };
 
@@ -38,7 +38,7 @@ export const determineCustomerType = (size) => {
  */
 export const parseVolumeRange = (remarks) => {
   if (!remarks) return { startVol: null, endVol: null };
-  
+
   // 숫자~숫자 패턴 찾기
   const match = remarks.match(/(\d+)\s*~\s*(\d+)/);
   if (match) {
@@ -47,7 +47,7 @@ export const parseVolumeRange = (remarks) => {
       endVol: parseInt(match[2])
     };
   }
-  
+
   // 단일 숫자 찾기 (예: "553!")
   const singleMatch = remarks.match(/(\d{3})/);
   if (singleMatch) {
@@ -57,7 +57,7 @@ export const parseVolumeRange = (remarks) => {
       endVol: vol
     };
   }
-  
+
   return { startVol: null, endVol: null };
 };
 
@@ -66,11 +66,11 @@ export const parseVolumeRange = (remarks) => {
  */
 export const parsePrice = (priceString) => {
   if (!priceString) return 0;
-  
+
   // $, 쉼표 등 제거하고 숫자만 추출
   const cleaned = priceString.toString().replace(/[^0-9.-]/g, '');
   const parsed = parseFloat(cleaned);
-  
+
   return isNaN(parsed) ? 0 : parsed;
 };
 
@@ -79,7 +79,7 @@ export const parsePrice = (priceString) => {
  */
 export const generateVolumeColumns = (startVol, endVol, price) => {
   const volumes = {};
-  
+
   for (let vol = 550; vol <= 574; vol++) {
     const key = `Vol ${vol}`;
     // 범위 내에 있으면 가격 입력, 아니면 빈 문자열
@@ -89,7 +89,7 @@ export const generateVolumeColumns = (startVol, endVol, price) => {
       volumes[key] = "";
     }
   }
-  
+
   return volumes;
 };
 
@@ -98,7 +98,7 @@ export const generateVolumeColumns = (startVol, endVol, price) => {
  */
 export const calculateTotalAmount = (startVol, endVol, pricePerIssue) => {
   if (!startVol || !endVol || !pricePerIssue) return 0;
-  
+
   const issueCount = endVol - startVol + 1;
   return pricePerIssue * issueCount;
 };
@@ -111,30 +111,30 @@ export const calculateTotalAmount = (startVol, endVol, pricePerIssue) => {
 export const transformAdRow = (row) => {
   // 원본 데이터 추출
   const [
-    no,           // 0
+    _no,          // 0 (unused)
     customer,     // 1
     address,      // 2
     tel,          // 3
-    pageNo,       // 4
+    _pageNo,      // 4 (unused)
     size,         // 5
     price,        // 6
     received,     // 7
     haveCollect,  // 8
     remarks       // 9
   ] = row;
-  
+
   // 데이터 파싱
   const { phone, mobile } = parsePhoneNumbers(tel);
   const customerType = determineCustomerType(size);
   const { startVol, endVol } = parseVolumeRange(remarks);
-  
+
   const priceNum = parsePrice(price);
-  const receivedNum = parsePrice(received);
+  const _receivedNum = parsePrice(received); // eslint-disable-line no-unused-vars
   const unpaidNum = parsePrice(haveCollect);
-  
+
   const totalAmount = calculateTotalAmount(startVol, endVol, priceNum);
   const volumeColumns = generateVolumeColumns(startVol, endVol, `$${priceNum}`);
-  
+
   // 고객관리 시트 형식으로 변환
   return {
     "고객 유형": customerType,
@@ -175,7 +175,7 @@ export const transformAdRow = (row) => {
 export const transformAllAdData = (adRows) => {
   // 헤더 행 제외 (보통 처음 5-6행은 헤더/설명)
   const dataRows = adRows.slice(6); // 실제 데이터가 시작되는 행부터
-  
+
   return dataRows
     .filter(row => row[1] && row[1].trim()) // 업체명이 있는 행만
     .map(row => transformAdRow(row));
@@ -186,11 +186,11 @@ export const transformAllAdData = (adRows) => {
  */
 export const exportToCSV = (transformedData) => {
   if (!transformedData || transformedData.length === 0) return "";
-  
+
   // 헤더 생성
   const headers = Object.keys(transformedData[0]);
   const headerRow = headers.join(",");
-  
+
   // 데이터 행 생성
   const dataRows = transformedData.map(row => {
     return headers.map(header => {
@@ -202,7 +202,7 @@ export const exportToCSV = (transformedData) => {
       return value;
     }).join(",");
   });
-  
+
   return [headerRow, ...dataRows].join("\n");
 };
 
@@ -211,16 +211,16 @@ export const exportToCSV = (transformedData) => {
  */
 export const exportToTSV = (transformedData) => {
   if (!transformedData || transformedData.length === 0) return "";
-  
+
   // 헤더 생성
   const headers = Object.keys(transformedData[0]);
   const headerRow = headers.join("\t");
-  
+
   // 데이터 행 생성 (탭으로 구분)
   const dataRows = transformedData.map(row => {
     return headers.map(header => row[header] || "").join("\t");
   });
-  
+
   return [headerRow, ...dataRows].join("\n");
 };
 
@@ -231,27 +231,27 @@ export const logTransformSummary = (originalData, transformedData) => {
   console.log("=== 데이터 변환 완료 ===");
   console.log(`원본 행 수: ${originalData.length}`);
   console.log(`변환된 행 수: ${transformedData.length}`);
-  
+
   // 고객 유형별 통계
   const typeStats = {};
   transformedData.forEach(row => {
     const type = row["고객 유형"];
     typeStats[type] = (typeStats[type] || 0) + 1;
   });
-  
+
   console.log("\n고객 유형별 통계:");
   Object.entries(typeStats).forEach(([type, count]) => {
     console.log(`  ${type}: ${count}개`);
   });
-  
+
   // 미수금 통계
   const unpaidCustomers = transformedData.filter(row => {
     const unpaid = parsePrice(row["누적 미수금"]);
     return unpaid > 0;
   });
-  
+
   console.log(`\n미수금 있는 고객: ${unpaidCustomers.length}개`);
-  
+
   console.log("\n[수동 입력 필요 항목]");
   console.log("- 업종");
   console.log("- 대표자");

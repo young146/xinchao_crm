@@ -20,13 +20,13 @@ const VolumeSchedule = () => {
   // 초기 로드 및 업데이트 감지
   useEffect(() => {
     loadSchedule();
-    
+
     const handleUpdate = () => {
       loadSchedule();
     };
-    
+
     window.addEventListener("volumeScheduleUpdated", handleUpdate);
-    
+
     return () => {
       window.removeEventListener("volumeScheduleUpdated", handleUpdate);
     };
@@ -199,13 +199,13 @@ const VolumeSchedule = () => {
                   backgroundColor: isCurrent
                     ? "#fff3e0"
                     : isPublished
-                    ? "#f5f5f5"
-                    : "#e3f2fd",
+                      ? "#f5f5f5"
+                      : "#e3f2fd",
                   border: isCurrent
                     ? "3px solid #ff9800"
                     : isPublished
-                    ? "2px solid #ccc"
-                    : "2px solid #2196F3",
+                      ? "2px solid #ccc"
+                      : "2px solid #2196F3",
                   borderRadius: "10px",
                 }}
               >
@@ -232,8 +232,8 @@ const VolumeSchedule = () => {
                       backgroundColor: isCurrent
                         ? "#ff9800"
                         : isPublished
-                        ? "#4caf50"
-                        : "#2196F3",
+                          ? "#4caf50"
+                          : "#2196F3",
                       color: "#fff",
                       borderRadius: "12px",
                       fontSize: "11px",
@@ -343,7 +343,7 @@ const VolumeSchedule = () => {
             marginTop: "10px",
           }}
         >
-          <div style={{ color: "#999" }}>// 예시:</div>
+          <div style={{ color: "#999" }}>{/* 예시: */}</div>
           <div>
             <span style={{ color: "#9c27b0" }}>554</span>: {"{"}{" "}
             <span style={{ color: "#1976d2" }}>date</span>:{" "}

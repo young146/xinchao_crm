@@ -114,7 +114,7 @@ const LeadPipeline = () => {
   // Google Sheets에서 리드 데이터 가져오기
   useEffect(() => {
     loadLeadsFromSheet();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // CSV 파싱 (gviz 응답용 - 따옴표 포함 필드 처리)
   const parseCSV = (text) => {
@@ -246,6 +246,7 @@ const LeadPipeline = () => {
   });
 
   // 단계 이동 함수
+  // eslint-disable-next-line no-unused-vars
   const moveToNextStage = (lead, newStage) => {
     const updatedLead = { ...lead, stage: newStage };
     setLeads(leads.map(l => l.id === lead.id ? updatedLead : l));
@@ -352,10 +353,6 @@ const LeadPipeline = () => {
     .filter(l => !deletedIds.includes(l.id))
     .sort((a, b) => parseDate(b.date) - parseDate(a.date));
 
-  // 오늘 이하 다음 액션이 있는 모든 리드 항목
-  const todayActions = Object.entries(leadMeta)
-    .flatMap(([, m]) => (m.actions || []).filter(a => !a.done && a.date <= today))
-    .sort((a, b) => a.date.localeCompare(b.date));
 
   if (loading) {
     return <div style={{ padding: "50px", textAlign: "center" }}>영업 파이프라인 데이터를 불러오는 중...</div>;
@@ -664,7 +661,7 @@ const LeadDetailModal = ({ lead, onClose, onUpdate, meta = {}, onSaveMeta }) => 
     if (consultationLogs[0]) setConsultation1({ ...consultationLogs[0], nextActionDate: consultationLogs[0].nextActionDate || "", nextActionText: consultationLogs[0].nextActionText || consultationLogs[0].nextAction || "" });
     if (consultationLogs[1]) setConsultation2({ ...consultationLogs[1], nextActionDate: consultationLogs[1].nextActionDate || "", nextActionText: consultationLogs[1].nextActionText || consultationLogs[1].nextAction || "" });
     if (consultationLogs[2]) setConsultation3({ ...consultationLogs[2], nextActionDate: consultationLogs[2].nextActionDate || "", nextActionText: consultationLogs[2].nextActionText || consultationLogs[2].nextAction || "" });
-  }, [lead]);
+  }, [lead]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 현재 단계에서 이동 가능한 다음 단계들 (진행 단계 제거)
   const getAvailableNextStages = () => {
@@ -1717,26 +1714,5 @@ const InfoRow = ({ label, value }) => (
   </div>
 );
 
-const FormField = ({ label, type = "text", value, onChange, placeholder }) => (
-  <div>
-    <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
-      {label}
-    </label>
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        width: "100%",
-        padding: "10px",
-        border: "2px solid #ddd",
-        borderRadius: "5px",
-        fontSize: "14px",
-        boxSizing: "border-box",
-      }}
-    />
-  </div>
-);
 
 export default LeadPipeline;

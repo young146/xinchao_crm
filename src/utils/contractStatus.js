@@ -96,14 +96,12 @@ export const getPaymentStatus = (totalAmount, received, startVol, endVol, curren
   if (startVol && endVol && currentVol && currentVol >= startVol && currentVol <= endVol) {
     const totalIssues = endVol - startVol + 1;
     const publishedIssues = Math.max(0, Math.min(currentVol, endVol) - startVol + 1);
-    const remainingIssues = endVol - currentVol;
     const pricePerIssue = totalAmount / totalIssues;
     const expectedPayment = publishedIssues * pricePerIssue;
-    const publishedRate = (publishedIssues / totalIssues) * 100;
-    
+
     // 게재 대비 수금 비율
     const collectionVsPublished = (received / expectedPayment) * 100;
-    
+
     // 1. 전액 선불 (80% 이상 선불)
     if (paymentRate >= 80) {
       return {
@@ -115,7 +113,7 @@ export const getPaymentStatus = (totalAmount, received, startVol, endVol, curren
         paymentType: "FULL_PREPAID"
       };
     }
-    
+
     // 2. 일부 선불 (게재분보다 많이 받았지만 전액은 아님)
     if (collectionVsPublished > 120) {
       const prepaidIssues = Math.floor(received / pricePerIssue);
@@ -128,7 +126,7 @@ export const getPaymentStatus = (totalAmount, received, startVol, endVol, curren
         paymentType: "PARTIAL_PREPAID"
       };
     }
-    
+
     // 3. 매호 정산 (게재분과 거의 일치)
     if (collectionVsPublished >= 80 && collectionVsPublished <= 120) {
       return {
@@ -140,7 +138,7 @@ export const getPaymentStatus = (totalAmount, received, startVol, endVol, curren
         paymentType: "PAY_PER_ISSUE"
       };
     }
-    
+
     // 4. 수금 지연 (게재분보다 적게 받음)
     if (collectionVsPublished < 80) {
       const delayedIssues = publishedIssues - Math.floor(received / pricePerIssue);
@@ -215,7 +213,7 @@ export const getContractProgress = (startVol, endVol, currentVol = CURRENT_VOLUM
 
   const totalIssues = endVol - startVol + 1;
   const publishedIssues = Math.max(0, Math.min(currentVol, endVol) - startVol + 1);
-  
+
   return Math.min(100, (publishedIssues / totalIssues) * 100);
 };
 
