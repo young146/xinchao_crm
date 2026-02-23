@@ -1,13 +1,14 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
+// Firebase 설정 (chaovietnam-login 프로젝트)
 const firebaseConfig = {
-    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.REACT_APP_FIREBASE_APP_ID,
+    apiKey: "AIzaSyB5av2Ye0MqCb_vQMJkj9fw5HMSGnwqnlw",
+    authDomain: "chaovietnam-login.firebaseapp.com",
+    projectId: "chaovietnam-login",
+    storageBucket: "chaovietnam-login.firebasestorage.app",
+    messagingSenderId: "249390849714",
+    appId: "1:249390849714:web:c85f3a442b947417e973ab",
 };
 
 const app = initializeApp(firebaseConfig);
