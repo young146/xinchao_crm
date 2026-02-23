@@ -84,26 +84,70 @@ export async function saveTrash(items) { await setField("trash", "items", items)
 // ── 1회 읽기 (마이그레이션 전용) ────────────────────────────────
 export async function getManualLeads() { return getField("manualLeads", "leads", []); }
 
-// ── localStorage → Firestore 최초 마이그레이션 ──────────────────
+// ── localStorage → Firestore 자동 병합 마이그레이션 ─────────────
+// 각 컴퓨터가 앱을 열 때마다 localStorage 데이터를 Firestore에 병합하고 삭제합니다.
+// 사용자가 아무것도 할 필요 없습니다.
 export async function migrateFromLocalStorage() {
-    const mapping = [
-        { docId: "deletedIds", field: "ids", lsKey: "crm_deletedIds" },
-        { docId: "leadMeta", field: "data", lsKey: "crm_leadMeta" },
-        { docId: "manualLeads", field: "leads", lsKey: "crm_manualLeads" },
-        { docId: "trash", field: "items", lsKey: "crm_trash" },
-    ];
+    // 이미 이 브라우저에서 마이그레이션 완료했으면 스킵
+    if (localStorage.getItem('crm_migrated_v2') === 'done') return;
 
-    for (const { docId, field, lsKey } of mapping) {
-        const lsRaw = localStorage.getItem(lsKey);
-        if (!lsRaw) continue;
-        const snap = await getDoc(ref(docId));
-        if (snap.exists()) continue; // 이미 Firestore에 있으면 스킵
-        try {
-            const parsed = JSON.parse(lsRaw);
-            await setField(docId, field, parsed);
-            console.log(`[Migration] ✅ ${lsKey} → Firestore 완료`);
-        } catch (e) {
-            console.error(`[Migration] ❌ ${lsKey} 실패:`, e.message);
+    console.log('[Migration] localStorage → Firestore 병합 시작...');
+
+    try {
+        // 1) deletedIds 병합: localStorage + Firestore 합집합
+        const lsIds = JSON.parse(localStorage.getItem('crm_deletedIds') || '[]');
+        if (lsIds.length > 0) {
+            const snap = await getDoc(ref('deletedIds'));
+            const fsIds = snap.exists() ? (snap.data().ids || []) : [];
+            const merged = [...new Set([...fsIds, ...lsIds])]; // 중복 제거 합집합
+            await setField('deletedIds', 'ids', merged);
+            console.log(`[Migration] deletedIds 병합: ${fsIds.length}개 + ${lsIds.length}개 → ${merged.length}개`);
         }
+
+        // 2) trash 병합: localStorage + Firestore 합집합 (id 기준 중복 제거)
+        const lsTrash = JSON.parse(localStorage.getItem('crm_trash') || '[]');
+        if (lsTrash.length > 0) {
+            const snap = await getDoc(ref('trash'));
+            const fsTrash = snap.exists() ? (snap.data().items || []) : [];
+            const trashMap = new Map();
+            [...fsTrash, ...lsTrash].forEach(item => trashMap.set(item.id, item));
+            const merged = [...trashMap.values()];
+            await setField('trash', 'items', merged);
+            console.log(`[Migration] trash 병합: ${fsTrash.length}개 + ${lsTrash.length}개 → ${merged.length}개`);
+        }
+
+        // 3) leadMeta 병합: Firestore 우선, localStorage로 보완
+        const lsMeta = JSON.parse(localStorage.getItem('crm_leadMeta') || '{}');
+        if (Object.keys(lsMeta).length > 0) {
+            const snap = await getDoc(ref('leadMeta'));
+            const fsMeta = snap.exists() ? (snap.data().data || {}) : {};
+            const merged = { ...lsMeta, ...fsMeta }; // Firestore 값 우선
+            await setField('leadMeta', 'data', merged);
+            console.log(`[Migration] leadMeta 병합 완료`);
+        }
+
+        // 4) manualLeads 병합
+        const lsManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
+        if (lsManual.length > 0) {
+            const snap = await getDoc(ref('manualLeads'));
+            const fsManual = snap.exists() ? (snap.data().leads || []) : [];
+            const manualMap = new Map();
+            [...lsManual, ...fsManual].forEach(l => manualMap.set(l.id, l));
+            const merged = [...manualMap.values()];
+            await setField('manualLeads', 'leads', merged);
+            console.log(`[Migration] manualLeads 병합 완료`);
+        }
+
+        // 마이그레이션 완료 표시 (이 브라우저에서 다시 안 함)
+        localStorage.setItem('crm_migrated_v2', 'done');
+        // 구 localStorage 데이터 삭제
+        localStorage.removeItem('crm_deletedIds');
+        localStorage.removeItem('crm_leadMeta');
+        localStorage.removeItem('crm_manualLeads');
+        localStorage.removeItem('crm_trash');
+        console.log('[Migration] ✅ 완료 - localStorage 정리됨');
+
+    } catch (e) {
+        console.error('[Migration] ❌ 실패:', e.message);
     }
 }
