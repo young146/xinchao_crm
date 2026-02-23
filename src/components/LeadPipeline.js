@@ -1,10 +1,11 @@
-﻿import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import {
-  getDeletedIds, saveDeletedIds,
-  getLeadMeta, saveLeadMeta as fsaveLeadMeta,
+  saveDeletedIds,
+  saveLeadMeta as fsaveLeadMeta,
   getManualLeads, saveManualLeads,
-  getTrash, saveTrash,
+  saveTrash,
   migrateFromLocalStorage,
+  subscribeAll,
 } from "../services/crmFirestore";
 
 /**
@@ -171,23 +172,42 @@ const LeadPipeline = () => {
     await fsaveLeadMeta(next);
   };
 
-  // Firestore 데이터 로드 + 마이그레이션 (앱 시작시 1회)
+  // Firestore 실시간 구독 (onSnapshot) + 마이그레이션
+  // manualLeads는 loadLeadsFromSheet에서 필요하므로 ref로 관리
+  const manualLeadsRef = useRef([]);
+  const sheetsLoadedRef = useRef(false); // Sheets 로드 최초 1회 완료 여부
+
   useEffect(() => {
-    const initFirestore = async () => {
-      await migrateFromLocalStorage();
-      const [ids, meta, manual, trashItems] = await Promise.all([
-        getDeletedIds(),
-        getLeadMeta(),
-        getManualLeads(),
-        getTrash(),
-      ]);
-      setDeletedIds(ids);
-      setLeadMeta(meta);
-      setTrash(trashItems);
-      // manualLeads는 loadLeadsFromSheet 내부에서 사용하므로 전달
-      loadLeadsFromSheet(ids, meta, manual);
-    };
-    initFirestore();
+    // 1) localStorage → Firestore 마이그레이션 (최초 1회)
+    migrateFromLocalStorage();
+
+    // 2) Firestore 실시간 구독
+    const unsubscribe = subscribeAll({
+      onDeletedIds: (ids) => {
+        setDeletedIds(ids);
+      },
+      onLeadMeta: (meta) => {
+        setLeadMeta(meta);
+      },
+      onManualLeads: (manual) => {
+        manualLeadsRef.current = manual;
+        // Sheets 로드가 완료된 후에만 leads 업데이트
+        if (sheetsLoadedRef.current) {
+          setLeads(prev => {
+            const sheetLeads = prev.filter(l => !l.id.startsWith('manual-'));
+            return [...manual, ...sheetLeads];
+          });
+        }
+      },
+      onTrash: (items) => {
+        setTrash(items);
+      },
+    });
+
+    // 3) Google Sheets 로드
+    loadLeadsFromSheet();
+
+    return () => unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // CSV 파싱 (gviz 응답용 - 따옴표 포함 필드 처리)
@@ -207,7 +227,7 @@ const LeadPipeline = () => {
     });
   };
 
-  const loadLeadsFromSheet = async (initDeletedIds, initMeta, initManualLeads) => {
+  const loadLeadsFromSheet = async () => {
     try {
       const sheetId = "1gbtZ7jTsYvN7IQ8gnpMNg2TVJHu-lo9o3UWIvJ7fsPo";
 
@@ -302,7 +322,8 @@ const LeadPipeline = () => {
         });
 
       // Firestore 메타 오버라이드 적용 (단계·상담일지·수정된 정보)
-      const storedMeta = initMeta || {};
+      // onSnapshot으로 받은 현재 leadMeta state 사용
+      const storedMeta = leadMeta || {};
       const mergedLeads = parsedLeads.map(lead => {
         const m = storedMeta[lead.id] || {};
         return {
@@ -314,8 +335,10 @@ const LeadPipeline = () => {
       });
 
       // 수동 추가 리드(Firestore manualLeads) — 삭제된 항목 제외하고 병합
-      const deletedSet = new Set(initDeletedIds || []);
-      const manualLeads = (initManualLeads || []).filter(l => !deletedSet.has(l.id));
+      // onSnapshot으로 받은 현재 deletedIds state 사용
+      const deletedSet = new Set(deletedIds || []);
+      const manualLeads = (manualLeadsRef.current || []).filter(l => !deletedSet.has(l.id));
+      sheetsLoadedRef.current = true; // Sheets 로드 완료 표시
       setLeads([...manualLeads, ...mergedLeads]);
       setLoading(false);
     } catch (error) {
