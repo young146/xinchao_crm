@@ -1,4 +1,11 @@
 ﻿import React, { useState, useEffect } from "react";
+import {
+  getDeletedIds, saveDeletedIds,
+  getLeadMeta, saveLeadMeta as fsaveLeadMeta,
+  getManualLeads, saveManualLeads,
+  getTrash, saveTrash,
+  migrateFromLocalStorage,
+} from "../services/crmFirestore";
 
 /**
  * 영업 파이프라인 관리 시스템
@@ -87,92 +94,100 @@ const LeadPipeline = () => {
   const [showConsultationForm, setShowConsultationForm] = useState(null);
   const [filter, setFilter] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
-  // localStorage 기반 – 삭제 목록 & 리드별 메타데이터(다음일정, ToDo)
-  const [deletedIds, setDeletedIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('crm_deletedIds') || '[]'); } catch { return []; }
-  });
-  const [leadMeta, setLeadMeta] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('crm_leadMeta') || '{}'); } catch { return {}; }
-  });
+  // Firestore 기반 – 삭제 목록 & 리드별 메타데이터(다음일정, ToDo)
+  const [deletedIds, setDeletedIds] = useState([]);
+  const [leadMeta, setLeadMeta] = useState({});
   // 휴지통: 삭제된 리드 전체 스냅샷 저장
-  const [trash, setTrash] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('crm_trash') || '[]'); } catch { return []; }
-  });
+  const [trash, setTrash] = useState([]);
   const [showTrash, setShowTrash] = useState(false);
 
   // 리드 → 휴지통으로 이동 (삭제)
-  const deleteLead = (lead, e) => {
+  const deleteLead = async (lead, e) => {
     e.stopPropagation();
     if (!window.confirm(`"${lead.customer}"를 휴지통으로 이동할까요?\n(휴지통에서 복원할 수 있습니다)`)) return;
     // 휴지통에 스냅샷 저장
     const trashedItem = { ...lead, deletedAt: new Date().toISOString() };
     const nextTrash = [trashedItem, ...trash];
     setTrash(nextTrash);
-    localStorage.setItem('crm_trash', JSON.stringify(nextTrash));
+    await saveTrash(nextTrash);
     // deletedIds에도 추가 (화면 필터용)
     const next = [...deletedIds, lead.id];
     setDeletedIds(next);
-    localStorage.setItem('crm_deletedIds', JSON.stringify(next));
+    await saveDeletedIds(next);
     // leads state에서도 제거
     setLeads(prev => prev.filter(l => l.id !== lead.id));
   };
 
   // 휴지통에서 복원
-  const restoreFromTrash = (item) => {
+  const restoreFromTrash = async (item) => {
     const nextTrash = trash.filter(t => t.id !== item.id);
     setTrash(nextTrash);
-    localStorage.setItem('crm_trash', JSON.stringify(nextTrash));
+    await saveTrash(nextTrash);
     // deletedIds에서 제거
     const nextDeleted = deletedIds.filter(id => id !== item.id);
     setDeletedIds(nextDeleted);
-    localStorage.setItem('crm_deletedIds', JSON.stringify(nextDeleted));
+    await saveDeletedIds(nextDeleted);
     // 복원할 리드 준비
     const restoredLead = { ...item };
     delete restoredLead.deletedAt;
-    // 수동 추가 리드는 crm_manualLeads에도 복원
+    // 수동 추가 리드는 manualLeads에도 복원
     if (item.id.startsWith('manual-')) {
-      const prevManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
-      localStorage.setItem('crm_manualLeads', JSON.stringify([restoredLead, ...prevManual]));
+      const prevManual = await getManualLeads();
+      await saveManualLeads([restoredLead, ...prevManual]);
     }
     setLeads(prev => [restoredLead, ...prev]);
   };
 
   // 휴지통에서 영구 삭제
-  const permanentDelete = (item) => {
+  const permanentDelete = async (item) => {
     if (!window.confirm(`"${item.customer}"를 영구 삭제할까요?\n복원이 불가능합니다.`)) return;
     const nextTrash = trash.filter(t => t.id !== item.id);
     setTrash(nextTrash);
-    localStorage.setItem('crm_trash', JSON.stringify(nextTrash));
-    // 수동 추가 리드면 crm_manualLeads에서도 제거
+    await saveTrash(nextTrash);
+    // 수동 추가 리드면 manualLeads에서도 제거
     if (item.id.startsWith('manual-')) {
-      const prevManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
-      localStorage.setItem('crm_manualLeads', JSON.stringify(prevManual.filter(l => l.id !== item.id)));
+      const prevManual = await getManualLeads();
+      await saveManualLeads(prevManual.filter(l => l.id !== item.id));
     }
   };
 
   // 휴지통 전체 비우기
-  const emptyTrash = () => {
+  const emptyTrash = async () => {
     if (!window.confirm(`휴지통의 ${trash.length}개 항목을 모두 영구 삭제할까요?`)) return;
-    // 수동 추가 리드 crm_manualLeads에서 제거
+    // 수동 추가 리드 manualLeads에서 제거
     const manualTrashIds = new Set(trash.filter(t => t.id.startsWith('manual-')).map(t => t.id));
     if (manualTrashIds.size > 0) {
-      const prevManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
-      localStorage.setItem('crm_manualLeads', JSON.stringify(prevManual.filter(l => !manualTrashIds.has(l.id))));
+      const prevManual = await getManualLeads();
+      await saveManualLeads(prevManual.filter(l => !manualTrashIds.has(l.id)));
     }
     setTrash([]);
-    localStorage.removeItem('crm_trash');
+    await saveTrash([]);
   };
 
-  // 리드 메타 저장 (다음일정, ToDo)
-  const saveLeadMeta = (leadId, meta) => {
+  // 리드 메타 저장 (다음일정, ToDo) → Firestore
+  const saveLeadMeta = async (leadId, meta) => {
     const next = { ...leadMeta, [leadId]: meta };
     setLeadMeta(next);
-    localStorage.setItem('crm_leadMeta', JSON.stringify(next));
+    await fsaveLeadMeta(next);
   };
 
-  // Google Sheets에서 리드 데이터 가져오기
+  // Firestore 데이터 로드 + 마이그레이션 (앱 시작시 1회)
   useEffect(() => {
-    loadLeadsFromSheet();
+    const initFirestore = async () => {
+      await migrateFromLocalStorage();
+      const [ids, meta, manual, trashItems] = await Promise.all([
+        getDeletedIds(),
+        getLeadMeta(),
+        getManualLeads(),
+        getTrash(),
+      ]);
+      setDeletedIds(ids);
+      setLeadMeta(meta);
+      setTrash(trashItems);
+      // manualLeads는 loadLeadsFromSheet 내부에서 사용하므로 전달
+      loadLeadsFromSheet(ids, meta, manual);
+    };
+    initFirestore();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // CSV 파싱 (gviz 응답용 - 따옴표 포함 필드 처리)
@@ -192,7 +207,7 @@ const LeadPipeline = () => {
     });
   };
 
-  const loadLeadsFromSheet = async () => {
+  const loadLeadsFromSheet = async (initDeletedIds, initMeta, initManualLeads) => {
     try {
       const sheetId = "1gbtZ7jTsYvN7IQ8gnpMNg2TVJHu-lo9o3UWIvJ7fsPo";
 
@@ -286,8 +301,8 @@ const LeadPipeline = () => {
           };
         });
 
-      // localStorage 오버라이드 적용 (단계·상담일지·수정된 정보)
-      const storedMeta = JSON.parse(localStorage.getItem('crm_leadMeta') || '{}');
+      // Firestore 메타 오버라이드 적용 (단계·상담일지·수정된 정보)
+      const storedMeta = initMeta || {};
       const mergedLeads = parsedLeads.map(lead => {
         const m = storedMeta[lead.id] || {};
         return {
@@ -298,10 +313,9 @@ const LeadPipeline = () => {
         };
       });
 
-      // 수동 추가 리드(crm_manualLeads) — 삭제된 항목 제외하고 병합
-      const deletedSet = new Set(JSON.parse(localStorage.getItem('crm_deletedIds') || '[]'));
-      const manualLeads = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]')
-        .filter(l => !deletedSet.has(l.id));
+      // 수동 추가 리드(Firestore manualLeads) — 삭제된 항목 제외하고 병합
+      const deletedSet = new Set(initDeletedIds || []);
+      const manualLeads = (initManualLeads || []).filter(l => !deletedSet.has(l.id));
       setLeads([...manualLeads, ...mergedLeads]);
       setLoading(false);
     } catch (error) {
@@ -532,7 +546,7 @@ const LeadPipeline = () => {
         const todayOnlyActions = allActions.filter(a => a.date === today);
         const weekActions = allActions.filter(a => a.date > today && a.date <= weekEnd);
 
-        const markDone = (action) => {
+        const markDone = async (action) => {
           const updated = { ...leadMeta };
           const metaKey = Object.keys(updated).find(k =>
             (updated[k].actions || []).some(a => a.date === action.date && a.text === action.text && a.customer === action.customer)
@@ -545,11 +559,11 @@ const LeadPipeline = () => {
               )
             };
             setLeadMeta(updated);
-            localStorage.setItem('crm_leadMeta', JSON.stringify(updated));
+            await fsaveLeadMeta(updated);
           }
         };
 
-        const addManualAction = (date, customer, text) => {
+        const addManualAction = async (date, customer, text) => {
           // 수동 항목은 'manual' 키 아래 저장
           const manualKey = 'manual';
           const prev = leadMeta[manualKey] || {};
@@ -557,7 +571,7 @@ const LeadPipeline = () => {
           const newAction = { date, text: text.trim(), done: false, customer: customer.trim(), leadId: null };
           const next = { ...leadMeta, [manualKey]: { ...prev, actions: [...prevActions, newAction] } };
           setLeadMeta(next);
-          localStorage.setItem('crm_leadMeta', JSON.stringify(next));
+          await fsaveLeadMeta(next);
         };
 
         const ActionItem = ({ action, badge, badgeColor }) => {
@@ -910,7 +924,7 @@ const LeadPipeline = () => {
           onSaveMeta={meta => saveLeadMeta(selectedLead.id, meta)}
           onClose={() => setSelectedLead(null)}
           onUpdate={(updatedLead) => {
-            // localStorage에 단계·상담일지·수정 정보 영속 저장
+            // Firestore에 단계·상담일지·수정 정보 영속 저장
             const prevMeta = leadMeta[updatedLead.id] || {};
             saveLeadMeta(updatedLead.id, {
               ...prevMeta,
