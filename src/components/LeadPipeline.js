@@ -94,14 +94,73 @@ const LeadPipeline = () => {
   const [leadMeta, setLeadMeta] = useState(() => {
     try { return JSON.parse(localStorage.getItem('crm_leadMeta') || '{}'); } catch { return {}; }
   });
+  // 휴지통: 삭제된 리드 전체 스냅샷 저장
+  const [trash, setTrash] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('crm_trash') || '[]'); } catch { return []; }
+  });
+  const [showTrash, setShowTrash] = useState(false);
 
-  // 리드 삭제 (localStorage에 영속)
+  // 리드 → 휴지통으로 이동 (삭제)
   const deleteLead = (lead, e) => {
     e.stopPropagation();
-    if (!window.confirm(`"${lead.customer}" 항목을 목록에서 삭제할까요?\n(Google Sheet 원본 데이터는 유지됩니다)`)) return;
+    if (!window.confirm(`"${lead.customer}"를 휴지통으로 이동할까요?\n(휴지통에서 복원할 수 있습니다)`)) return;
+    // 휴지통에 스냅샷 저장
+    const trashedItem = { ...lead, deletedAt: new Date().toISOString() };
+    const nextTrash = [trashedItem, ...trash];
+    setTrash(nextTrash);
+    localStorage.setItem('crm_trash', JSON.stringify(nextTrash));
+    // deletedIds에도 추가 (화면 필터용)
     const next = [...deletedIds, lead.id];
     setDeletedIds(next);
     localStorage.setItem('crm_deletedIds', JSON.stringify(next));
+    // leads state에서도 제거
+    setLeads(prev => prev.filter(l => l.id !== lead.id));
+  };
+
+  // 휴지통에서 복원
+  const restoreFromTrash = (item) => {
+    const nextTrash = trash.filter(t => t.id !== item.id);
+    setTrash(nextTrash);
+    localStorage.setItem('crm_trash', JSON.stringify(nextTrash));
+    // deletedIds에서 제거
+    const nextDeleted = deletedIds.filter(id => id !== item.id);
+    setDeletedIds(nextDeleted);
+    localStorage.setItem('crm_deletedIds', JSON.stringify(nextDeleted));
+    // 복원할 리드 준비
+    const restoredLead = { ...item };
+    delete restoredLead.deletedAt;
+    // 수동 추가 리드는 crm_manualLeads에도 복원
+    if (item.id.startsWith('manual-')) {
+      const prevManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
+      localStorage.setItem('crm_manualLeads', JSON.stringify([restoredLead, ...prevManual]));
+    }
+    setLeads(prev => [restoredLead, ...prev]);
+  };
+
+  // 휴지통에서 영구 삭제
+  const permanentDelete = (item) => {
+    if (!window.confirm(`"${item.customer}"를 영구 삭제할까요?\n복원이 불가능합니다.`)) return;
+    const nextTrash = trash.filter(t => t.id !== item.id);
+    setTrash(nextTrash);
+    localStorage.setItem('crm_trash', JSON.stringify(nextTrash));
+    // 수동 추가 리드면 crm_manualLeads에서도 제거
+    if (item.id.startsWith('manual-')) {
+      const prevManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
+      localStorage.setItem('crm_manualLeads', JSON.stringify(prevManual.filter(l => l.id !== item.id)));
+    }
+  };
+
+  // 휴지통 전체 비우기
+  const emptyTrash = () => {
+    if (!window.confirm(`휴지통의 ${trash.length}개 항목을 모두 영구 삭제할까요?`)) return;
+    // 수동 추가 리드 crm_manualLeads에서 제거
+    const manualTrashIds = new Set(trash.filter(t => t.id.startsWith('manual-')).map(t => t.id));
+    if (manualTrashIds.size > 0) {
+      const prevManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
+      localStorage.setItem('crm_manualLeads', JSON.stringify(prevManual.filter(l => !manualTrashIds.has(l.id))));
+    }
+    setTrash([]);
+    localStorage.removeItem('crm_trash');
   };
 
   // 리드 메타 저장 (다음일정, ToDo)
@@ -227,7 +286,23 @@ const LeadPipeline = () => {
           };
         });
 
-      setLeads(parsedLeads);
+      // localStorage 오버라이드 적용 (단계·상담일지·수정된 정보)
+      const storedMeta = JSON.parse(localStorage.getItem('crm_leadMeta') || '{}');
+      const mergedLeads = parsedLeads.map(lead => {
+        const m = storedMeta[lead.id] || {};
+        return {
+          ...lead,
+          ...(m.stageOverride ? { stage: m.stageOverride } : {}),
+          ...(m.consultationLogs ? { consultationLogs: m.consultationLogs } : {}),
+          ...(m.infoOverride || {}),
+        };
+      });
+
+      // 수동 추가 리드(crm_manualLeads) — 삭제된 항목 제외하고 병합
+      const deletedSet = new Set(JSON.parse(localStorage.getItem('crm_deletedIds') || '[]'));
+      const manualLeads = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]')
+        .filter(l => !deletedSet.has(l.id));
+      setLeads([...manualLeads, ...mergedLeads]);
       setLoading(false);
     } catch (error) {
       console.error("리드 데이터 로드 실패:", error);
@@ -367,12 +442,36 @@ const LeadPipeline = () => {
           <h2 style={{ color: "#d32f2f", margin: 0, fontSize: "20px" }}>💼 영업 파이프라인</h2>
           <span style={{ fontSize: "13px", color: "#888" }}>2026년 문의 {leads.length}건 · 표시 {sortedLeads.length}건</span>
         </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          style={{ padding: "10px 20px", backgroundColor: "#d32f2f", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
-        >
-          ➕ 신규 광고 문의 접수
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          {/* 휴지통 버튼 */}
+          <button
+            onClick={() => setShowTrash(t => !t)}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: showTrash ? "#616161" : "#eeeeee",
+              color: showTrash ? "#fff" : "#555",
+              border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "13px",
+              position: "relative",
+            }}
+          >
+            🗑️ 휴지통
+            {trash.length > 0 && (
+              <span style={{
+                position: "absolute", top: "-6px", right: "-6px",
+                background: "#f44336", color: "#fff",
+                borderRadius: "50%", width: "18px", height: "18px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "11px", fontWeight: "bold",
+              }}>{trash.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            style={{ padding: "10px 20px", backgroundColor: "#d32f2f", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
+          >
+            ➕ 신규 광고 문의 접수
+          </button>
+        </div>
       </div>
 
       {/* 단계별 카운터 탭 */}
@@ -450,6 +549,17 @@ const LeadPipeline = () => {
           }
         };
 
+        const addManualAction = (date, customer, text) => {
+          // 수동 항목은 'manual' 키 아래 저장
+          const manualKey = 'manual';
+          const prev = leadMeta[manualKey] || {};
+          const prevActions = prev.actions || [];
+          const newAction = { date, text: text.trim(), done: false, customer: customer.trim(), leadId: null };
+          const next = { ...leadMeta, [manualKey]: { ...prev, actions: [...prevActions, newAction] } };
+          setLeadMeta(next);
+          localStorage.setItem('crm_leadMeta', JSON.stringify(next));
+        };
+
         const ActionItem = ({ action, badge, badgeColor }) => {
           const relatedLead = leads.find(l => l.id === action.leadId);
           return (
@@ -472,8 +582,146 @@ const LeadPipeline = () => {
           );
         };
 
-        const totalCount = overdueActions.length + todayOnlyActions.length + weekActions.length;
-        if (totalCount === 0) return null;
+        const ManualAddForm = () => {
+          const [showForm, setShowForm] = React.useState(false);
+          const [fDate, setFDate] = React.useState(today);
+          const [fCustomer, setFCustomer] = React.useState("");
+          const [fText, setFText] = React.useState("");
+          const [showSuggestions, setShowSuggestions] = React.useState(false);
+
+          // 기존 leads에서 고객명 중복 제거 목록
+          const uniqueCustomers = React.useMemo(() => {
+            const names = leads.map(l => l.customer).filter(Boolean);
+            return [...new Set(names)].sort();
+          }, []);
+
+          const suggestions = fCustomer.trim()
+            ? uniqueCustomers.filter(n => n.toLowerCase().includes(fCustomer.toLowerCase()))
+            : uniqueCustomers;
+
+          const handleCustomerChange = (val) => {
+            setFCustomer(val);
+            setShowSuggestions(true);
+          };
+
+          const handleSelectCustomer = (name) => {
+            setFCustomer(name);
+            setShowSuggestions(false);
+          };
+
+          const openNewLeadForm = () => {
+            // 신규 고객 → 기존 신규 광고 문의 접수 팝업 열기
+            setShowSuggestions(false);
+            setShowForm(false);
+            setFCustomer("");
+            setFText("");
+            setShowAddForm(true);
+          };
+
+          const handleAdd = () => {
+            if (!fDate || !fCustomer.trim() || !fText.trim()) {
+              alert("날짜, 고객명, 내용을 모두 입력하세요.");
+              return;
+            }
+            addManualAction(fDate, fCustomer, fText);
+            setFCustomer("");
+            setFText("");
+            setFDate(today);
+            setShowForm(false);
+          };
+
+          return (
+            <div style={{ marginTop: "12px", borderTop: "1px dashed #ffd180", paddingTop: "12px" }}>
+              {showForm ? (
+                <div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "flex-start" }}>
+                    {/* 날짜 */}
+                    <input
+                      type="date"
+                      value={fDate}
+                      onChange={e => setFDate(e.target.value)}
+                      style={{ padding: "6px 10px", border: "1px solid #ffc107", borderRadius: "6px", fontSize: "13px", outline: "none" }}
+                    />
+
+                    {/* 고객명 자동완성 */}
+                    <div style={{ position: "relative", width: "200px" }}>
+                      <input
+                        type="text"
+                        placeholder="고객명 검색 또는 입력"
+                        value={fCustomer}
+                        onChange={e => handleCustomerChange(e.target.value)}
+                        onFocus={() => setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                        style={{
+                          padding: "6px 10px", border: "1px solid #ffc107",
+                          borderRadius: "6px", fontSize: "13px", width: "100%", outline: "none", boxSizing: "border-box"
+                        }}
+                      />
+                      {showSuggestions && (
+                        <div style={{
+                          position: "absolute", top: "36px", left: 0, right: 0,
+                          background: "#fff", border: "1px solid #ffc107", borderRadius: "6px",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 999, maxHeight: "220px", overflowY: "auto"
+                        }}>
+                          {/* 신규 고객 접수 버튼 - 항상 최상단 표시 */}
+                          <div
+                            onMouseDown={openNewLeadForm}
+                            style={{ padding: "9px 12px", cursor: "pointer", borderBottom: "2px solid #e8f5e9", background: "#f1f8e9", display: "flex", alignItems: "center", gap: "8px" }}
+                          >
+                            <span style={{ fontSize: "12px", background: "#d32f2f", color: "#fff", padding: "2px 7px", borderRadius: "4px", whiteSpace: "nowrap" }}>신규</span>
+                            <span style={{ fontSize: "13px", fontWeight: "bold", color: "#1b5e20" }}>📞 신규 광고 문의 접수하기</span>
+                          </div>
+                          {/* 기존 고객 목록 */}
+                          {suggestions.length === 0 && fCustomer.trim() && (
+                            <div style={{ padding: "8px 12px", color: "#aaa", fontSize: "12px" }}>일치하는 기존 고객 없음</div>
+                          )}
+                          {!fCustomer.trim() && suggestions.length === 0 && (
+                            <div style={{ padding: "8px 12px", color: "#bbb", fontSize: "12px" }}>고객명을 입력하면 검색됩니다</div>
+                          )}
+                          {suggestions.map((name, idx) => (
+                            <div
+                              key={idx}
+                              onMouseDown={() => handleSelectCustomer(name)}
+                              style={{ padding: "8px 12px", cursor: "pointer", fontSize: "13px", borderBottom: "1px solid #f5f5f5" }}
+                              onMouseEnter={e => e.currentTarget.style.background = "#fff3e0"}
+                              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                            >
+                              {name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 할 일 내용 */}
+                    <input
+                      type="text"
+                      placeholder="할 일 내용"
+                      value={fText}
+                      onChange={e => setFText(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleAdd()}
+                      style={{ padding: "6px 10px", border: "1px solid #ffc107", borderRadius: "6px", fontSize: "13px", flex: 1, minWidth: "160px", outline: "none" }}
+                    />
+
+                    <button
+                      onClick={handleAdd}
+                      style={{ padding: "6px 14px", background: "#ff9800", color: "#fff", border: "none", borderRadius: "6px", fontSize: "13px", cursor: "pointer", fontWeight: "bold" }}
+                    >추가</button>
+                    <button
+                      onClick={() => { setShowForm(false); setFCustomer(""); setFText(""); }}
+                      style={{ padding: "6px 14px", background: "#eee", color: "#555", border: "none", borderRadius: "6px", fontSize: "13px", cursor: "pointer" }}
+                    >취소</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowForm(true)}
+                  style={{ padding: "6px 14px", background: "#fff3e0", color: "#e65100", border: "1px dashed #ffb74d", borderRadius: "6px", fontSize: "13px", cursor: "pointer", fontWeight: "bold" }}
+                >➕ 할 일 수동 추가</button>
+              )}
+            </div>
+          );
+        };
 
         return (
           <div style={{ marginBottom: "16px", background: "#fff", border: "2px solid #ff9800", borderRadius: "10px", padding: "16px" }}>
@@ -496,12 +744,59 @@ const LeadPipeline = () => {
                 {todayOnlyActions.map((a, i) => <ActionItem key={`t${i}`} action={a} badge="오늘" badgeColor="#ff9800" />)}
               </div>
             )}
-            {weekActions.length > 0 && (
-              <div>
-                <div style={{ fontSize: "12px", fontWeight: "bold", color: "#1565c0", marginBottom: "5px" }}>📆 금주의 할 일</div>
-                {weekActions.map((a, i) => <ActionItem key={`w${i}`} action={a} badge="예정" badgeColor="#1976d2" />)}
+            {weekActions.length > 0 && (() => {
+              const DAY_KR = ['일', '월', '화', '수', '목', '금', '토'];
+              // 날짜별 그룹핑
+              const byDate = weekActions.reduce((acc, a) => {
+                if (!acc[a.date]) acc[a.date] = [];
+                acc[a.date].push(a);
+                return acc;
+              }, {});
+              const sortedDates = Object.keys(byDate).sort();
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+              return (
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "bold", color: "#1565c0", marginBottom: "8px" }}>📆 금주의 할 일 ({weekActions.length}건)</div>
+                  {sortedDates.map(date => {
+                    const d = new Date(date + 'T00:00:00');
+                    const dayLabel = DAY_KR[d.getDay()];
+                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                    const isTomorrow = date === tomorrowStr;
+                    const [, mm, dd] = date.split('-');
+                    return (
+                      <div key={date} style={{ marginBottom: "10px" }}>
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: "6px",
+                          fontSize: "12px", fontWeight: "bold",
+                          color: isWeekend ? "#e53935" : "#1565c0",
+                          marginBottom: "4px",
+                          borderLeft: "3px solid " + (isWeekend ? "#e53935" : "#1976d2"),
+                          paddingLeft: "6px",
+                        }}>
+                          {mm}/{dd} ({dayLabel})
+                          {isTomorrow && <span style={{ fontSize: "10px", background: "#ff9800", color: "#fff", padding: "1px 6px", borderRadius: "8px" }}>내일</span>}
+                          <span style={{ fontSize: "11px", color: "#999", fontWeight: "normal" }}>{byDate[date].length}건</span>
+                        </div>
+                        {byDate[date].map((a, i) => (
+                          <ActionItem key={`w${date}${i}`} action={a} badge="" badgeColor="#1976d2" />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {overdueActions.length === 0 && todayOnlyActions.length === 0 && weekActions.length === 0 && (
+              <div style={{ padding: "16px", textAlign: "center", color: "#bbb", fontSize: "13px" }}>
+                📭 등록된 할 일이 없습니다. 아래에서 직접 추가해 보세요.
               </div>
             )}
+
+            <ManualAddForm />
           </div>
         );
       })()}
@@ -615,10 +910,105 @@ const LeadPipeline = () => {
           onSaveMeta={meta => saveLeadMeta(selectedLead.id, meta)}
           onClose={() => setSelectedLead(null)}
           onUpdate={(updatedLead) => {
+            // localStorage에 단계·상담일지·수정 정보 영속 저장
+            const prevMeta = leadMeta[updatedLead.id] || {};
+            saveLeadMeta(updatedLead.id, {
+              ...prevMeta,
+              stageOverride: updatedLead.stage,
+              consultationLogs: updatedLead.consultationLogs || [],
+              infoOverride: {
+                customer: updatedLead.customer,
+                contact: updatedLead.contact,
+                position: updatedLead.position,
+                phone: updatedLead.phone,
+                email: updatedLead.email,
+                adType: updatedLead.adType,
+                size: updatedLead.size,
+                remark: updatedLead.remark,
+              },
+            });
             setLeads(leads.map(l => l.id === updatedLead.id ? updatedLead : l));
             setSelectedLead(null);
           }}
         />
+      )}
+
+      {/* 🗑️ 휴지통 모달 (fixed 오버레이) */}
+      {showTrash && (
+        <div
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            display: "flex", justifyContent: "center", alignItems: "center",
+            zIndex: 9000, padding: "20px",
+          }}
+          onClick={() => setShowTrash(false)}
+        >
+          <div
+            style={{
+              background: "#fff", borderRadius: "12px", padding: "24px",
+              maxWidth: "560px", width: "100%", maxHeight: "80vh",
+              display: "flex", flexDirection: "column",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexShrink: 0 }}>
+              <h3 style={{ margin: 0, color: "#616161", fontSize: "17px" }}>🗑️ 휴지통 ({trash.length}건)</h3>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {trash.length > 0 && (
+                  <button
+                    onClick={emptyTrash}
+                    style={{ padding: "6px 14px", background: "#f44336", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", cursor: "pointer", fontWeight: "bold" }}
+                  >🔥 전체 영구삭제</button>
+                )}
+                <button
+                  onClick={() => setShowTrash(false)}
+                  style={{ padding: "6px 14px", background: "#eee", color: "#555", border: "none", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}
+                >✕ 닫기</button>
+              </div>
+            </div>
+
+            {/* 목록 */}
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {trash.length === 0 ? (
+                <div style={{ textAlign: "center", color: "#bbb", padding: "40px 0", fontSize: "14px" }}>📭 휴지통이 비어 있습니다</div>
+              ) : (
+                trash.map((item, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 14px", background: "#fafafa", borderRadius: "8px",
+                      marginBottom: "8px", border: "1px solid #e0e0e0",
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: "14px", color: "#444" }}>{item.customer}</strong>
+                      <span style={{ fontSize: "12px", color: "#999", marginLeft: "8px" }}>
+                        {item.contact} · {SALES_STAGES[item.stage]?.label || item.stage}
+                      </span>
+                      <div style={{ fontSize: "11px", color: "#bbb", marginTop: "3px" }}>
+                        삭제: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString('ko-KR') : "-"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                      <button
+                        onClick={() => restoreFromTrash(item)}
+                        style={{ padding: "5px 12px", background: "#e8f5e9", color: "#2e7d32", border: "1px solid #a5d6a7", borderRadius: "5px", fontSize: "12px", cursor: "pointer" }}
+                      >↩ 복원</button>
+                      <button
+                        onClick={() => permanentDelete(item)}
+                        style={{ padding: "5px 12px", background: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a", borderRadius: "5px", fontSize: "12px", cursor: "pointer" }}
+                      >✕ 영구삭제</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 신규 접수 폼 */}
@@ -626,7 +1016,11 @@ const LeadPipeline = () => {
         <AddLeadForm
           onClose={() => setShowAddForm(false)}
           onAdd={(newLead) => {
-            setLeads([{ ...newLead, id: `lead-${Date.now()}` }, ...leads]);
+            // AddLeadForm은 GAS로 Google Sheets에 이미 저장됨
+            // → crm_manualLeads에 중복 저장하지 않음 (새로고침 시 Sheets에서 읽어옴)
+            // → 현재 세션에만 임시로 state에 추가
+            const tempId = `temp-${Date.now()}`;
+            setLeads(prev => [{ ...newLead, id: tempId }, ...prev]);
             setShowAddForm(false);
           }}
         />
@@ -1581,8 +1975,11 @@ const AddLeadForm = ({ onClose, onAdd }) => {
     <div
       style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.55)", display: "flex",
-        justifyContent: "center", alignItems: "center", zIndex: 9999, padding: "16px",
+        backgroundColor: "rgba(0,0,0,0.55)",
+        display: "flex", justifyContent: "center", alignItems: "flex-start",
+        zIndex: 9999,
+        overflowY: "auto",
+        padding: "24px 16px 40px",
       }}
       onClick={onClose}
     >
@@ -1590,13 +1987,15 @@ const AddLeadForm = ({ onClose, onAdd }) => {
         style={{
           backgroundColor: "#fff",
           borderRadius: "10px",
-          maxWidth: "500px",
+          maxWidth: "520px",
           width: "100%",
-          padding: "30px",
+          display: "flex",
+          flexDirection: "column",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ background: "linear-gradient(135deg,#d32f2f,#b71c1c)", padding: "18px 22px", borderRadius: "10px 10px 0 0", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* 헤더 (고정) */}
+        <div style={{ background: "linear-gradient(135deg,#d32f2f,#b71c1c)", padding: "18px 22px", borderRadius: "10px 10px 0 0", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div>
             <div style={{ fontSize: "18px", fontWeight: "bold" }}>📞 신규 광고 문의 접수</div>
             <div style={{ fontSize: "12px", marginTop: "3px", opacity: 0.85 }}>전화·면담·이메일 문의 → 광고접수인덱스 자동 저장</div>
@@ -1604,7 +2003,8 @@ const AddLeadForm = ({ onClose, onAdd }) => {
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", fontSize: "18px", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer" }}>×</button>
         </div>
 
-        <div style={{ padding: "22px" }}>
+        {/* 스크롤 가능한 본문 */}
+        <div style={{ padding: "22px", overflowY: "auto" }}>
           {/* 접수 경로 */}
           <div style={sectionStyle}>📍 접수 경로</div>
           <div style={{ display: "flex", gap: "16px", marginBottom: "18px", flexWrap: "wrap" }}>
@@ -1676,26 +2076,46 @@ const AddLeadForm = ({ onClose, onAdd }) => {
           </div>
           <div style={{ marginBottom: "18px" }}>
             <label style={labelStyle}>문의 내용</label>
-            <textarea style={{ ...inputStyle, minHeight: "75px", resize: "vertical", fontFamily: "sans-serif" }}
+            <textarea style={{ ...inputStyle, minHeight: "80px", resize: "vertical", fontFamily: "sans-serif" }}
               value={formData.remark} onChange={e => set("remark", e.target.value)}
               placeholder="문의 내용, 예산, 기간, 특이사항 등" />
           </div>
 
           {/* 담당 영업사원 */}
           <div style={sectionStyle}>👤 입력 담당자</div>
-          <div style={{ marginBottom: "20px" }}>
+          <div style={{ marginBottom: "8px" }}>
             <label style={labelStyle}>담당자 이름 <span style={{ color: "#f44336" }}>*</span></label>
             <input style={inputStyle} value={formData.salesman} onChange={e => set("salesman", e.target.value)} placeholder="예: 이순신" />
             <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>이 문의를 입력하는 영업담당자의 이름을 적어주세요</div>
           </div>
+        </div>
 
-          {/* 버튼 */}
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button onClick={onClose} style={{ flex: 1, padding: "12px", backgroundColor: "#f5f5f5", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "15px" }}>취소</button>
-            <button onClick={handleSubmit} disabled={loading} style={{ flex: 2, padding: "12px", backgroundColor: loading ? "#aaa" : "#4caf50", color: "#fff", border: "none", borderRadius: "6px", cursor: loading ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: "bold" }}>
-              {loading ? "저장 중..." : "✅ 접수하기 (광고접수인덱스 저장)"}
-            </button>
-          </div>
+        {/* 저장 버튼 (하단 고정) */}
+        <div style={{
+          padding: "16px 22px",
+          borderTop: "2px solid #f0f0f0",
+          display: "flex", gap: "10px",
+          flexShrink: 0,
+          background: "#fff",
+          borderRadius: "0 0 10px 10px",
+        }}>
+          <button
+            onClick={onClose}
+            style={{ flex: 1, padding: "12px", backgroundColor: "#f5f5f5", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "15px" }}
+          >취소</button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{
+              flex: 2, padding: "12px",
+              backgroundColor: loading ? "#aaa" : "#4caf50",
+              color: "#fff", border: "none", borderRadius: "6px",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontSize: "15px", fontWeight: "bold",
+            }}
+          >
+            {loading ? "저장 중..." : "✅ 접수하기 (광고접수인덱스 저장)"}
+          </button>
         </div>
       </div>
     </div>
