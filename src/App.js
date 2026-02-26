@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import DataTransformer from "./components/DataTransformer";
 import DataFiller from "./components/DataFiller";
 import CustomerCard from "./components/CustomerCard";
+import CustomerDB from "./components/CustomerDB";
 import AddCustomerForm from "./components/AddCustomerForm";
 import VolumeSchedule from "./components/VolumeSchedule";
 import VolumeScheduleEditor from "./components/VolumeScheduleEditor";
@@ -13,7 +14,8 @@ const Dashboard = () => {
   const [inquiries, setInquiries] = useState([]);
   const [activeAds, setActiveAds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("dashboard"); // 'dashboard', 'filler', 'transformer', 'schedule', 'schedule-edit', 'pipeline'
+  const [activeTab, setActiveTab] = useState("dashboard"); // 'dashboard', 'filler', 'transformer', 'schedule', 'schedule-edit', 'pipeline', 'customerdb'
+  const [selectedDBCustomer, setSelectedDBCustomer] = useState(null); // 고객명단 탭에서 선택된 고객
   const [searchTerm, setSearchTerm] = useState(""); // 검색어
   const [selectedCustomer, setSelectedCustomer] = useState(null); // 선택된 고객
   const [showAddForm, setShowAddForm] = useState(false); // 새 고객 추가 폼 표시 여부
@@ -220,6 +222,21 @@ const Dashboard = () => {
             📅 발행 일정
           </button>
           <button
+            onClick={() => setActiveTab("customerdb")}
+            style={{
+              padding: "10px 20px",
+              fontSize: "14px",
+              backgroundColor: activeTab === "customerdb" ? "#d32f2f" : "#fff",
+              color: activeTab === "customerdb" ? "#fff" : "#333",
+              border: "2px solid #d32f2f",
+              borderRadius: "5px 5px 0 0",
+              cursor: "pointer",
+              fontWeight: activeTab === "customerdb" ? "bold" : "normal",
+            }}
+          >
+            👥 고객명단
+          </button>
+          <button
             onClick={() => setActiveTab("filler")}
             style={{
               padding: "10px 20px",
@@ -254,6 +271,25 @@ const Dashboard = () => {
 
       {/* 탭 컨텐츠 */}
       {activeTab === "pipeline" && <LeadPipeline />}
+
+      {/* 고객명단 탭 */}
+      {activeTab === "customerdb" && (
+        <>
+          <CustomerDB
+            onSelectCustomer={(row) => setSelectedDBCustomer(row)}
+          />
+          {selectedDBCustomer && (
+            <CustomerCard
+              customer={selectedDBCustomer}
+              mode="sheet"
+              onClose={() => setSelectedDBCustomer(null)}
+              onSave={() => {
+                setSelectedDBCustomer(null);
+              }}
+            />
+          )}
+        </>
+      )}
 
       {activeTab === "schedule" && (
         <div>
