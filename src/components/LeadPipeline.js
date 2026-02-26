@@ -6,7 +6,9 @@ import {
   saveTrash,
   migrateFromLocalStorage,
   subscribeAll,
+  getLeadMeta,
 } from "../services/crmFirestore";
+import PaymentModal from "./PaymentModal";
 
 /**
  * 영업 파이프라인 관리 시스템
@@ -101,6 +103,8 @@ const LeadPipeline = () => {
   // 휴지통: 삭제된 리드 전체 스냅샷 저장
   const [trash, setTrash] = useState([]);
   const [showTrash, setShowTrash] = useState(false);
+  // 수금 입력 모달
+  const [showPaymentModal, setShowPaymentModal] = useState(null); // lead 객체 저장
 
   // 리드 → 휴지통으로 이동 (삭제)
   const deleteLead = async (lead, e) => {
@@ -166,10 +170,12 @@ const LeadPipeline = () => {
   };
 
   // 리드 메타 저장 (다음일정, ToDo) → Firestore
+  // ✅ 안전한 개별 key merge: 다른 리드 데이터를 덮어쓰지 않음
   const saveLeadMeta = async (leadId, meta) => {
-    const next = { ...leadMeta, [leadId]: meta };
-    setLeadMeta(next);
-    await fsaveLeadMeta(next);
+    // state는 낙관적 업데이트
+    setLeadMeta(prev => ({ ...prev, [leadId]: meta }));
+    // Firestore는 해당 leadId key만 업데이트 (fsaveLeadMeta가 개별 merge 처리)
+    await fsaveLeadMeta(leadId, meta);
   };
 
   // Firestore 실시간 구독 (onSnapshot) + 마이그레이션
@@ -229,11 +235,11 @@ const LeadPipeline = () => {
 
   const loadLeadsFromSheet = async () => {
     try {
-      const sheetId = "1gbtZ7jTsYvN7IQ8gnpMNg2TVJHu-lo9o3UWIvJ7fsPo";
+      // ✅ 직원 Sheet (광고 관리 통합) - 상담이력 탭
+      const sheetId = "1Iue5sV2PE3c6rqLuVozrp14JiKciGyKvbP8bJheqWlA";
 
-      // 2025탭과 2026탭을 시트 이름으로 직접 지정해서 각각 가져옴
       const fetchTab = async (tabName) => {
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${tabName}&v=${Date.now()}`;
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&v=${Date.now()}`;
         try {
           const res = await fetch(url);
           console.log(`[LeadPipeline] ${tabName}탭 응답 상태:`, res.status, res.ok);
@@ -248,6 +254,7 @@ const LeadPipeline = () => {
             console.warn(`[LeadPipeline] ${tabName}탭: gviz 오류 응답 (시트 이름 확인 필요)`);
             return [];
           }
+          // 상담이력 탭: 헤더 3행 (Row1~3), 실제 데이터는 Row4부터 → slice(3)
           const parsed = parseCSV(text).slice(3);
           console.log(`[LeadPipeline] ${tabName}탭: ${parsed.length}행 파싱됨`);
           return parsed;
@@ -257,88 +264,138 @@ const LeadPipeline = () => {
         }
       };
 
-      const [rows2025, rows2026] = await Promise.all([
-        fetchTab("2025"),
-        fetchTab("2026"),
-      ]);
+      // 상담이력 단일 탭만 사용
+      const consultRows = await fetchTab("상담이력");
 
-      const allRows = [
-        ...rows2026.map(r => ({ ...r, _year: "2026" })),
-        ...rows2025.map(r => ({ ...r, _year: "2025" })),
-      ];
+      // ─── 상담이력 컬럼 구조 (0-based) ───
+      // Col 0: No, Col 1: 접촉일(DATE), Col 2: 고객사(CUSTOMER)
+      // Col 3: 담당자(CHARGER), Col 4: 직책(TITLE), Col 5: 연락처(PHONE)
+      // Col 6: 이메일(EMAIL), Col 7: 회차(COUNT), Col 8: 접촉방법(METHOD)
+      // Col 9: 상담내용(CONTENT), Col 10: 고객반응(REACTION)
+      // Col 11: 다음단계(NEXT_STEP), Col 12: Next Date(NEXT_DATE)
+      // Col 13: Status ← stage 판단 핵심 컬럼
+      // Col 14: 상품분류(CATEGORY), Col 15: 상품(PRODUCT), Col 16: 단가(PRICE)
+      // Col 17: 시작Vol, Col 18: 종료Vol, Col 19: 수금액(RECEIVED), Col 20: 메모(MEMO)
 
-      // 날짜 forward-fill + 연도 자동 보정 (탭 이름 기준)
-      let lastDate = "";
-      let lastYear = "2026";
-      const filledRows = allRows.map(row => {
-        const d = row[1] && row[1].trim();
-        const tabYear = row._year || lastYear;
-        if (d) { lastDate = d; lastYear = tabYear; }
-
-        // 날짜 연도를 탭 이름으로 강제 보정 (오타 방지)
-        // 예: 2025탭에서 "2024-03-15" → "2025-03-15"
-        let correctedDate = lastDate;
-        if (lastDate && tabYear) {
-          correctedDate = lastDate.replace(/^\d{4}/, tabYear);
-        }
-
-        return { ...row, _filledDate: correctedDate, _year: tabYear };
-      });
-
-      const parsedLeads = filledRows
-        .filter(row => row[2] && row[2].trim() !== "")  // 고객명 있는 행만
+      const parsedLeads = consultRows
+        .filter(row => row[2] && row[2].trim() !== "")  // 고객사 있는 행만
         .map((row, index) => {
+          // Status 컬럼(N열, index 13) 기반 stage 판단
+          const statusVal = (row[13] || "").trim();
           let stage = "INQUIRY";
-          const remark = (row[12] || "").toLowerCase();
-          if (remark.includes("계약") || remark.includes("진행")) stage = "CONTRACT";
-          else if (remark.includes("견적") || remark.includes("제안") || remark.includes("상담")) stage = "CONSULTATION";
-          else if (remark.includes("취소") || remark.includes("불발")) stage = "LOST";
-          else if (remark.includes("대기") || remark.includes("보류")) stage = "ON_HOLD";
+          if (statusVal === "계약완료") stage = "CONTRACT";
+          else if (statusVal === "거절") stage = "LOST";
+          else if (statusVal === "보류") stage = "ON_HOLD";
+          else if (
+            statusVal === "견적검토중" ||
+            statusVal === "계약협의중" ||
+            statusVal === "서명 후 회신" ||
+            statusVal === "자료검토중"
+          ) stage = "CONSULTATION";
+          // "진행중" 또는 기타 → INQUIRY
+
+          const dateVal = (row[1] || "").trim();
+          const memoVal = (row[20] || "").trim();
+
+          // ── 안정적 ID 생성 (Sheet 교체·행 순서 변경에도 불변) ──
+          // 고객사명 + 날짜를 조합 → 같은 고객이면 항상 동일 ID
+          // prefix를 'lead-'로 유지하여 기존 Firestore 데이터와 하위 호환
+          const customerKey = (row[2] || "unknown").trim()
+            .replace(/\s+/g, "_")
+            .replace(/[^a-zA-Z0-9가-힣_]/g, "");
+          const dateKey = dateVal.replace(/-/g, "").slice(0, 8) || "nodate";
+          const stableId = `lead-${customerKey}-${dateKey}`;
 
           return {
-            id: `lead-${index}`,
-            year: row._year,
-            date: row._filledDate || "",   // 채워진 날짜 사용
+            id: stableId,
+            date: dateVal,
             customer: row[2] || "",
             contact: row[3] || "",
             position: row[4] || "",
             phone: row[5] || "",
             email: row[6] || "",
-            adType: row[7] || "",
-            size: row[8] || "",
-            startDate: row[9] || "",
-            volume: row[10] || "",
-            term: row[11] || "",
-            remark: row[12] || "",
-            followUp: row[13] || "",
+            contactMethod: row[8] || "",
+            remark: row[9] || "",         // 상담내용
+            reaction: row[10] || "",      // 고객반응
+            nextStep: row[11] || "",      // 다음단계
+            nextDate: row[12] || "",      // Next Date
+            status: statusVal,
+            category: row[14] || "",      // 상품분류
+            adType: row[15] || "",        // 상품
+            price: row[16] || "",         // 단가
+            startVol: row[17] || "",      // 시작Vol
+            endVol: row[18] || "",        // 종료Vol
+            received: row[19] || "",      // 수금액
+            memo: memoVal,
+            followUp: row[11] || "",      // 다음단계를 followUp으로도 노출
             stage,
-            priority: remark.includes("긴급") ? "HIGH" : "MEDIUM",
+            priority: memoVal.includes("긴급") || statusVal.includes("계약") ? "HIGH" : "MEDIUM",
             documents: [],
             consultationLogs: [],
             history: [],
-            nextFollowUpDate: null,
-            estimatedValue: 0
+            nextFollowUpDate: row[12] || null,
+            estimatedValue: parseFloat(row[19]) || 0,
           };
         });
 
-      // Firestore 메타 오버라이드 적용 (단계·상담일지·수정된 정보)
-      // onSnapshot으로 받은 현재 leadMeta state 사용
-      const storedMeta = leadMeta || {};
+      // ── Firestore 메타 오버라이드 적용 ──────────────────────────
+      // ⚠️ leadMeta state는 Sheet 파싱 시점에 아직 비어있을 수 있으므로
+      //    Firestore에서 직접 읽어 타이밍 문제 해결
+      const freshMeta = await getLeadMeta();
+      // state도 업데이트 (onSnapshot보다 먼저 도착했을 때를 위해)
+      const storedMeta = Object.keys(freshMeta).length > 0 ? freshMeta : (leadMeta || {});
+
+      // 구 형식 키들에서 고객명을 역방향 추출 → 고객명 → 메타 매핑
+      // (stageOverride, consultationLogs, actions 등 포함된 것만)
+      const customerNameToOldMeta = {};
+      Object.entries(storedMeta).forEach(([key, meta]) => {
+        // 구 형식 키 판별: "lead-숫자" 또는 "consult-숫자" 패턴
+        const isOldKey = /^(lead|consult)-\d+$/.test(key);
+        if (isOldKey && meta) {
+          // meta 안에 infoOverride.customer 또는 actions[*].customer가 있으면 추출
+          const customerFromInfo = meta.infoOverride?.customer;
+          const customerFromAction = meta.actions?.[0]?.customer;
+          const customerName = customerFromInfo || customerFromAction;
+          if (customerName && !customerNameToOldMeta[customerName]) {
+            customerNameToOldMeta[customerName] = meta;
+          }
+        }
+      });
+
       const mergedLeads = parsedLeads.map(lead => {
-        const m = storedMeta[lead.id] || {};
+        // 1) 새 형식 ID로 직접 매칭 (우선)
+        let m = storedMeta[lead.id] || {};
+        // 2) 구 형식 ID 데이터를 고객명으로 역방향 매핑 (병합)
+        const oldMeta = customerNameToOldMeta[lead.customer] || {};
+        // 상담 로그 병합: 구 데이터 + 새 데이터 (중복 제거)
+        const mergedLogs = [
+          ...(oldMeta.consultationLogs || []),
+          ...(m.consultationLogs || []),
+        ].filter((log, idx, arr) =>
+          // 날짜+내용 기준 중복 제거
+          arr.findIndex(l => l.date === log.date && l.content === log.content) === idx
+        );
+        const mergedActions = [
+          ...(oldMeta.actions || []),
+          ...(m.actions || []),
+        ].filter((a, idx, arr) =>
+          arr.findIndex(x => x.date === a.date && x.text === a.text) === idx
+        );
+
         return {
           ...lead,
-          ...(m.stageOverride ? { stage: m.stageOverride } : {}),
-          ...(m.consultationLogs ? { consultationLogs: m.consultationLogs } : {}),
-          ...(m.infoOverride || {}),
+          // stage: 새 ID 우선, 없으면 구 ID 데이터 사용
+          ...((m.stageOverride || oldMeta.stageOverride) ? { stage: m.stageOverride || oldMeta.stageOverride } : {}),
+          consultationLogs: mergedLogs.length > 0 ? mergedLogs : (lead.consultationLogs || []),
+          ...(m.infoOverride || oldMeta.infoOverride || {}),
+          ...(mergedActions.length > 0 ? {} : {}), // actions는 leadMeta 레벨에서 관리
         };
       });
 
-      // 수동 추가 리드(Firestore manualLeads) — 삭제된 항목 제외하고 병합
-      // onSnapshot으로 받은 현재 deletedIds state 사용
+      // 수동 추가 리드(Firestore manualLeads) 병합
       const deletedSet = new Set(deletedIds || []);
       const manualLeads = (manualLeadsRef.current || []).filter(l => !deletedSet.has(l.id));
-      sheetsLoadedRef.current = true; // Sheets 로드 완료 표시
+      sheetsLoadedRef.current = true;
       setLeads([...manualLeads, ...mergedLeads]);
       setLoading(false);
     } catch (error) {
@@ -924,7 +981,14 @@ const LeadPipeline = () => {
                 </div>
 
                 {/* 삭제 버튼 */}
-                <div style={{ textAlign: "center" }}>
+                <div style={{ textAlign: "center", display: "flex", gap: "4px", justifyContent: "center" }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); setShowPaymentModal(lead); }}
+                    title="수금 입력"
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "16px", color: "#aaa", padding: "4px", borderRadius: "4px" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "#00bcd4"}
+                    onMouseLeave={e => e.currentTarget.style.color = "#aaa"}
+                  >💰</button>
                   <button
                     onClick={e => deleteLead(lead, e)}
                     title="목록에서 삭제"
@@ -967,6 +1031,15 @@ const LeadPipeline = () => {
             setLeads(leads.map(l => l.id === updatedLead.id ? updatedLead : l));
             setSelectedLead(null);
           }}
+        />
+      )}
+
+      {/* 💰 수금 입력 모달 */}
+      {showPaymentModal && (
+        <PaymentModal
+          lead={showPaymentModal}
+          onClose={() => setShowPaymentModal(null)}
+          onSuccess={() => setShowPaymentModal(null)}
         />
       )}
 
@@ -1952,7 +2025,7 @@ const AddLeadForm = ({ onClose, onAdd }) => {
       await fetch(GAS_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain" }, // no-cors에서 application/json은 차단됨
         body: JSON.stringify({
           date: formData.date,
           customerName: formData.customer,

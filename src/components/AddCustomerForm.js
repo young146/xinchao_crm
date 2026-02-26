@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 // ⚠️ 자동추가.gs 배포 후 URL을 여기에 붙여넣으세요
-const GAS_URL = ""; // 예: "https://script.google.com/macros/s/XXXXX/exec"
+const GAS_URL = "https://script.google.com/macros/s/AKfycbw1rd5SbMDMSxDYbCarcuJ5chVgcKKQgEvyJfXR0xEpYxs-tP93ZJigYoB6XgDzfoOpGQ/exec";
 
 const AD_TYPES = ["inside", "outside", "online", "Yellow Page", "Flea Market"];
 const AD_SIZES = ["FC", "1/2", "1/4", "옐로페이지", "온라인 포함"];
