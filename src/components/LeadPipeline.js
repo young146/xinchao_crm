@@ -1125,13 +1125,13 @@ const LeadPipeline = () => {
       {showAddForm && (
         <AddLeadForm
           onClose={() => setShowAddForm(false)}
-          onAdd={(newLead) => {
-            // AddLeadForm은 GAS로 Google Sheets에 이미 저장됨
-            // → crm_manualLeads에 중복 저장하지 않음 (새로고침 시 Sheets에서 읽어옴)
-            // → 현재 세션에만 임시로 state에 추가
-            const tempId = `temp-${Date.now()}`;
-            setLeads(prev => [{ ...newLead, id: tempId }, ...prev]);
+          onAdd={() => {
+            // GAS가 상담이력 탭에 저장 완료 → 4초 후 Sheet 새로고침
             setShowAddForm(false);
+            sheetsLoadedRef.current = false; // 재로드 허용
+            setTimeout(() => {
+              loadLeadsFromSheet();
+            }, 4000);
           }}
         />
       )}
@@ -2020,55 +2020,41 @@ const AddLeadForm = ({ onClose, onAdd }) => {
 
     setLoading(true);
 
-    // ① Google Sheets 저장
+    // ① Google Sheets(광고 관리 통합 > 상담이력) 저장
     try {
       await fetch(GAS_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "text/plain" }, // no-cors에서 application/json은 차단됨
+        headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
+          action: "CONSULT",            // ← 반드시 CONSULT: 상담이력 탭에 기록
           date: formData.date,
           customerName: formData.customer,
-          contact: formData.contact,
+          charger: formData.contact,
           position: formData.position,
           phone: formData.phone,
           email: formData.email,
-          adType: formData.adType,
-          size: formData.size,
-          startDate: formData.startDate,
-          remark: formData.remark,
           contactMethod: contactMethodLabels[formData.contactMethod] + " 문의",
-          salesman: formData.salesman,
+          remark: formData.remark,      // CONTENT(9) 매핑
+          adType: formData.adType,
+          memo: formData.salesman ? "담당: " + formData.salesman : "",
           source: "OFFLINE",
         }),
       });
+      console.log("[AddLeadForm] GAS CONSULT 전송 완료 →", formData.customer);
     } catch (err) {
-      console.warn("GAS 전송 실패:", err);
+      console.warn("[AddLeadForm] GAS 전송 실패:", err);
     }
 
-    // ② CRM 파이프라인 추가
-    onAdd({
-      date: formData.date,
-      customer: formData.customer,
-      contact: formData.contact,
-      position: formData.position,
-      phone: formData.phone,
-      email: formData.email,
-      adType: formData.adType,
-      size: formData.size,
-      startDate: formData.startDate,
-      remark: formData.remark,
-      followUp: contactMethodLabels[formData.contactMethod] + " 문의",
-      stage: "INQUIRY",
-      priority: "MEDIUM",
-      documents: [],
-      history: [],
-      nextFollowUpDate: null,
-      estimatedValue: 0,
-    });
-
     setLoading(false);
-    alert(`✅ ${formData.customer} 접수 완료!\n광고접수인덱스에도 저장되었습니다.`);
+    alert(
+      `✅ ${formData.customer} 접수 완료!\n` +
+      `→ 광고 관리 통합 Sheet > 상담이력 탭에 저장됩니다.\n` +
+      `(파이프라인 새로고침 후 목록에서 확인하세요)`
+    );
+
+    // ② 폼 닫고 파이프라인 새로고침 요청 (onAdd(null) → loadLeadsFromSheet 트리거)
+    onAdd(null);
   };
 
   const inputStyle = {
