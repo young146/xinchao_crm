@@ -504,6 +504,14 @@ const LeadPipeline = () => {
 
     setLeads(leads.map(l => l.id === lead.id ? updatedLead : l));
     setShowConsultationForm(null);
+
+    // ✅ Firestore 저장 (이전에 빠져있던 부분)
+    const prevMeta = leadMeta[lead.id] || {};
+    saveLeadMeta(lead.id, {
+      ...prevMeta,
+      stageOverride: newStage,
+      consultationLogs: updatedLead.consultationLogs,
+    });
   };
 
   // 날짜 파서: "2026. 1. 5" 과 "2026-02-20" 두 형식 모두 지원
@@ -615,7 +623,28 @@ const LeadPipeline = () => {
       {/* 🗓️ 오늘의 할 일 + 금주의 할 일 패널 (항상 표시) */}
       {(() => {
         const allActions = Object.entries(leadMeta)
-          .flatMap(([, m]) => (m.actions || []).filter(a => !a.done))
+          .flatMap(([leadId, m]) => {
+            // 1) 명시적으로 저장된 actions 배열
+            const savedActions = (m.actions || [])
+              .filter(a => !a.done)
+              .map(a => ({ ...a, leadId: a.leadId || leadId }));
+
+            // 2) consultationLogs 안의 nextActionDate/nextActionText (기존 데이터 소급 적용)
+            const logActions = (m.consultationLogs || [])
+              .filter(log => log.nextActionDate && log.nextActionText?.trim())
+              .map(log => ({
+                date: log.nextActionDate,
+                text: log.nextActionText.trim(),
+                done: false,
+                customer: m.infoOverride?.customer || leadId,
+                leadId: leadId,
+                fromLog: true,
+              }))
+              // savedActions에 이미 같은 내용 있으면 중복 제거
+              .filter(la => !savedActions.find(sa => sa.date === la.date && sa.text === la.text));
+
+            return [...savedActions, ...logActions];
+          })
           .sort((a, b) => a.date.localeCompare(b.date));
 
         const endOfWeek = new Date();
@@ -627,31 +656,33 @@ const LeadPipeline = () => {
         const weekActions = allActions.filter(a => a.date > today && a.date <= weekEnd);
 
         const markDone = async (action) => {
-          const updated = { ...leadMeta };
-          const metaKey = Object.keys(updated).find(k =>
-            (updated[k].actions || []).some(a => a.date === action.date && a.text === action.text && a.customer === action.customer)
+          const metaKey = Object.keys(leadMeta).find(k =>
+            (leadMeta[k].actions || []).some(a => a.date === action.date && a.text === action.text && a.customer === action.customer)
           );
           if (metaKey) {
-            updated[metaKey] = {
-              ...updated[metaKey],
-              actions: updated[metaKey].actions.map(a =>
+            const updatedKeyMeta = {
+              ...leadMeta[metaKey],
+              actions: leadMeta[metaKey].actions.map(a =>
                 (a.date === action.date && a.text === action.text && a.customer === action.customer) ? { ...a, done: true } : a
               )
             };
-            setLeadMeta(updated);
-            await fsaveLeadMeta(updated);
+            // state 낙관적 업데이트
+            setLeadMeta(prev => ({ ...prev, [metaKey]: updatedKeyMeta }));
+            // Firestore: 해당 key만 업데이트
+            await saveLeadMeta(metaKey, updatedKeyMeta);
           }
         };
 
         const addManualAction = async (date, customer, text) => {
-          // 수동 항목은 'manual' 키 아래 저장
           const manualKey = 'manual';
           const prev = leadMeta[manualKey] || {};
           const prevActions = prev.actions || [];
           const newAction = { date, text: text.trim(), done: false, customer: customer.trim(), leadId: null };
-          const next = { ...leadMeta, [manualKey]: { ...prev, actions: [...prevActions, newAction] } };
-          setLeadMeta(next);
-          await fsaveLeadMeta(next);
+          const updatedManual = { ...prev, actions: [...prevActions, newAction] };
+          // state 낙관적 업데이트
+          setLeadMeta(p => ({ ...p, [manualKey]: updatedManual }));
+          // Firestore: manual key만 업데이트
+          await saveLeadMeta(manualKey, updatedManual);
         };
 
         const ActionItem = ({ action, badge, badgeColor }) => {
@@ -1013,10 +1044,19 @@ const LeadPipeline = () => {
           onUpdate={(updatedLead) => {
             // Firestore에 단계·상담일지·수정 정보 영속 저장
             const prevMeta = leadMeta[updatedLead.id] || {};
+            // 기존 consultationLogs와 새 logs 누적 (중복리 없이 merge)
+            const existingLogs = prevMeta.consultationLogs || [];
+            const newLogs = updatedLead.consultationLogs || [];
+            const mergedLogs = [
+              ...existingLogs.filter(e =>
+                !newLogs.find(n => n.date === e.date && n.content === e.content)
+              ),
+              ...newLogs,
+            ];
             saveLeadMeta(updatedLead.id, {
               ...prevMeta,
               stageOverride: updatedLead.stage,
-              consultationLogs: updatedLead.consultationLogs || [],
+              consultationLogs: mergedLogs,
               infoOverride: {
                 customer: updatedLead.customer,
                 contact: updatedLead.contact,

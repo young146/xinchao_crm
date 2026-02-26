@@ -91,14 +91,26 @@ export async function saveDeletedIds(ids) { await setField("deletedIds", "ids", 
 export async function saveLeadMeta(leadIdOrFullData, singleMeta) {
     try {
         if (typeof leadIdOrFullData === "string" && singleMeta !== undefined) {
-            // ✅ 안전한 방식: 해당 리드 key만 업데이트 (다른 리드 데이터 보존)
             const leadId = leadIdOrFullData;
             const sanitized = JSON.parse(JSON.stringify(singleMeta ?? null));
-            // updateDoc + dot-notation: data.lead-xx 만 업데이트, 나머지 key 보존
-            await updateDoc(ref("leadMeta"), { [`data.${leadId}`]: sanitized });
-            console.log(`[Firestore] ✅ leadMeta[${leadId}] 저장 완료 (안전 merge)`);
+
+            // ✅ updateDoc + dot-notation: data 필드 내부의 단일 key만 업데이트
+            // 다른 lead key들은 절대 건드리지 않음
+            // (setDoc+merge:true는 중첩 Map을 통째로 교체하므로 사용 금지)
+            try {
+                await updateDoc(ref("leadMeta"), { [`data.${leadId}`]: sanitized });
+                console.log(`[Firestore] ✅ leadMeta[${leadId}] 저장 완료`);
+            } catch (innerErr) {
+                if (innerErr.code === "not-found") {
+                    // 문서가 없는 경우에만 setDoc으로 생성 (첫 실행 시)
+                    await setDoc(ref("leadMeta"), { data: { [leadId]: sanitized } });
+                    console.log(`[Firestore] ✅ leadMeta 신규 생성 후 저장: ${leadId}`);
+                } else {
+                    throw innerErr;
+                }
+            }
         } else {
-            // 하위호환: 전체 data 교체 (마이그레이션 전용, 가급적 사용 자제)
+            // 하위호환: 전체 data 교체 (마이그레이션 전용)
             const sanitized = JSON.parse(JSON.stringify(leadIdOrFullData ?? {}));
             await setDoc(ref("leadMeta"), { data: sanitized }, { merge: true });
             console.log(`[Firestore] ✅ leadMeta 전체 저장 완료`);
@@ -107,6 +119,8 @@ export async function saveLeadMeta(leadIdOrFullData, singleMeta) {
         console.error(`[Firestore] ❌ leadMeta 저장 실패:`, e.code, e.message);
     }
 }
+
+
 
 export async function saveManualLeads(leads) { await setField("manualLeads", "leads", leads); }
 export async function saveTrash(items) { await setField("trash", "items", items); }
