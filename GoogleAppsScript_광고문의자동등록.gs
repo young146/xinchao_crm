@@ -87,14 +87,34 @@ function handleConsult(data) {
   row[CONSULT_COL.TITLE]    = data.position || "";
   row[CONSULT_COL.PHONE]    = data.phone || "";
   row[CONSULT_COL.EMAIL]    = data.email || "";
-  row[CONSULT_COL.METHOD]   = methodLabel;
-  row[CONSULT_COL.CONTENT]  = data.remark || "";
-  row[CONSULT_COL.STATUS]   = "진행중";
-  row[CONSULT_COL.PRODUCT]  = data.adType || "";
-  row[CONSULT_COL.PRICE]    = data.size || ""; // 광고 사이즈를 임시로 PRICE 열에
-  row[CONSULT_COL.MEMO]     = data.salesman ? "담당: " + data.salesman : "";
+  row[CONSULT_COL.METHOD]       = methodLabel;
+  row[CONSULT_COL.CONTENT]      = data.remark || "";
+  row[CONSULT_COL.NEXT_STEP]    = data.nextActionText || "";  // 다음 할일 내용
+  row[CONSULT_COL.NEXT_DATE]    = data.nextActionDate || "";  // 다음 할일 날짜
+  row[CONSULT_COL.STATUS]       = data.nextActionText ? "진행중" : "진행중";
+  row[CONSULT_COL.PRODUCT]      = data.adType || "";
+  row[CONSULT_COL.PRICE]        = data.size || "";
+  row[CONSULT_COL.MEMO]         = data.salesman ? "담당: " + data.salesman : "";
 
   sheet.appendRow(row);
+
+  // 🔔 온라인/앱 문의 → Firestore onlineAlerts에 즉시 저장 (앱 실시간 알림용)
+  const contactMethodStr = (data.contactMethod || "").toLowerCase();
+  const isOnline = data.source === "ONLINE" ||
+                   contactMethodStr.includes("온라인") ||
+                   contactMethodStr.includes("online") ||
+                   contactMethodStr.includes("앱");
+  if (isOnline) {
+    try {
+      writeToFirestore({
+        customer:      data.customerName || "",
+        phone:         data.phone || "",
+        date:          data.date || today,
+        contactMethod: methodLabel,
+        createdAt:     new Date().toISOString(),
+      });
+    } catch(e) { Logger.log("Firestore 문의 알림 실패(비중요): " + e.message); }
+  }
 
   // 신규 상담 접수 후 고객DB 자동 갱신
   try { buildCustomerDB(); } catch(e) { Logger.log("DB 갱신 실패(non-critical): " + e.message); }
@@ -314,112 +334,166 @@ function buildCustomerDB() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
 
   // 1) 필요한 탭 가져오기
-  const dbSheet = ss.getSheetByName(CUSTOMER_DB_SHEET);
-  if (!dbSheet) {
-    Logger.log("❌ 고객 DB 탭이 없습니다. 탭 이름을 확인하세요: " + CUSTOMER_DB_SHEET);
-    return;
+  const dbSheet       = ss.getSheetByName(CUSTOMER_DB_SHEET);
+  const consultSheet  = ss.getSheetByName(CONSULT_SHEET);
+  const contractSheet = ss.getSheetByName(CONTRACT_SHEET);
+  const paymentSheet  = ss.getSheetByName(PAYMENT_SHEET);
+
+  if (!dbSheet)      { Logger.log("❌ 고객DB 탭 없음"); return; }
+  if (!consultSheet) { Logger.log("❌ 상담이력 탭 없음"); return; }
+
+  // 2) 상담이력 전체 읽기 – 헤더는 항상 3행 고정
+  const consultAll  = consultSheet.getDataRange().getValues();
+  const contractAll = contractSheet ? contractSheet.getDataRange().getValues() : [];
+  const paymentAll  = paymentSheet  ? paymentSheet.getDataRange().getValues()  : [];
+
+  // 헤더 3행 제거 후 실제 데이터만 추출 (비어있는 행도 제거)
+  const consultData = consultAll.slice(3).filter(r => {
+    const name = String(r[CONSULT_COL.CUSTOMER] || "").trim();
+    return name.length > 0 && name !== "고객사";
+  });
+  Logger.log("📋 상담이력 데이터 행 수: " + consultData.length);
+
+  // ── 고객DB 헤더 확인 ──
+  const dbLastRow = dbSheet.getLastRow();
+  let existingNames = new Set();
+  let dbLastDataRow = 1;
+  if (dbLastRow >= 2) {
+    const dbNames = dbSheet.getRange(2, 1, dbLastRow - 1, 1).getValues();
+    dbNames.forEach(([n]) => {
+      const normalized = String(n).trim().replace(/\s+/g, " ").toLowerCase();
+      if (normalized) existingNames.add(normalized);
+    });
+    dbLastDataRow = dbLastRow;
   }
+  Logger.log("📂 고객DB 기존 고객 수: " + existingNames.size);
 
-  const consultSheet   = ss.getSheetByName(CONSULT_SHEET);
-  const contractSheet  = ss.getSheetByName(CONTRACT_SHEET);
-  const paymentSheet   = ss.getSheetByName(PAYMENT_SHEET);
+  // ── 상담이력에서 고객별 최신 정보 수집 (이름 정규화 포함) ──
+  const customerMap = new Map();
+  consultData.forEach(r => {
+    const rawName = String(r[CONSULT_COL.CUSTOMER] || "").trim().replace(/\s+/g, " ");
+    if (!rawName) return;
+    const date = String(r[CONSULT_COL.DATE] || "");
+    const existing = customerMap.get(rawName);
+    if (!existing || date > (existing.latestDate || "")) {
+      customerMap.set(rawName, {
+        contact:    String(r[CONSULT_COL.CHARGER] || ""),
+        position:   String(r[CONSULT_COL.TITLE]   || ""),
+        phone:      String(r[CONSULT_COL.PHONE]    || ""),
+        email:      String(r[CONSULT_COL.EMAIL]    || ""),
+        area:       "",
+        city:       "",
+        adType:     String(r[CONSULT_COL.PRODUCT]  || ""),
+        source:     String(r[CONSULT_COL.METHOD]   || ""),
+        latestDate: date,
+      });
+    }
+  });
+  Logger.log("🔎 상담이력 유니크 고객 수: " + customerMap.size);
 
-  // 2) 상담이력 읽기 (헤더 3행 제외)
-  const consultData = consultSheet ? consultSheet.getDataRange().getValues() : [];
-  // 계약관리 읽기
-  const contractData = contractSheet ? contractSheet.getDataRange().getValues() : [];
-  // 수금이력 읽기
-  const paymentData = paymentSheet ? paymentSheet.getDataRange().getValues() : [];
+  // ── 고객DB에 없는 고객 → 신규 행 추가 ──
+  let addedCount = 0;
+  const addedNames = [];
+  customerMap.forEach((info, name) => {
+    const normalized = name.toLowerCase();
+    if (!existingNames.has(normalized)) {
+      dbLastDataRow++;
+      dbSheet.getRange(dbLastDataRow, 1, 1, 9).setValues([[
+        name,           // A: 고객사명
+        info.contact,   // B: 담당자
+        info.position,  // C: 직책
+        info.phone,     // D: 연락처
+        info.email,     // E: 이메일
+        "",             // F: 주소
+        info.area,      // G: AREA
+        info.city,      // H: CITY
+        info.source,    // I: 가입출처
+      ]]);
+      existingNames.add(normalized);
+      addedNames.push(name);
+      addedCount++;
+    }
+  });
+  Logger.log("🆕 신규 추가된 고객 (" + addedCount + "명): " + addedNames.join(", "));
 
-  // 3) 고객 DB 헤더 행 쓰기 (J열 이후)
-  const headerRow = dbSheet.getRange(1, DB_STATUS_COL, 1, 9);
-  headerRow.setValues([[
+  // ── 고객DB 헤더 J-R열 ──
+  dbSheet.getRange(1, DB_STATUS_COL, 1, 9).setValues([[
     "현재상태", "영업단계", "최근상담일", "상담횟수", "광고상품",
     "계약금액($)", "수금액($)", "미수금($)", "최종업데이트"
-  ]]);
-  headerRow.setFontWeight("bold").setBackground("#E3F2FD");
+  ]]).setFontWeight("bold").setBackground("#E3F2FD");
 
-  // 4) 고객 DB의 A열(고객사 이름) 읽기 (2행부터)
-  const lastRow = dbSheet.getLastRow();
-  if (lastRow < 2) {
-    Logger.log("고객 DB 탭에 데이터가 없습니다.");
-    return;
-  }
+  // ── 전체 고객DB A열 다시 읽어서 통계 업데이트 ──
+  const finalLastRow = dbSheet.getLastRow();
+  if (finalLastRow < 2) return;
 
-  const customerNames = dbSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  const allDbNames = dbSheet.getRange(2, 1, finalLastRow - 1, 1).getValues();
   const today = new Date().toISOString().split("T")[0];
 
-  // 5) 각 고객별로 상담/계약/수금 데이터 집계
-  customerNames.forEach(([rawName], idx) => {
-    const row = idx + 2; // 실제 Sheet 행 번호
+  allDbNames.forEach(([rawName], idx) => {
+    const row  = idx + 2;
     const name = String(rawName || "").trim();
     if (!name) return;
 
-    // ── 상담이력에서 해당 고객 검색 ──
+    // 상담이력: 해당 고객의 모든 레코드
     const consultRows = consultData.filter(r =>
       String(r[CONSULT_COL.CUSTOMER] || "").trim() === name
     );
-
-    let recentConsultDate = "";
-    let consultCount = consultRows.length;
-    let adType = "";
-    let status = "상담중";
+    let recentDate = "";
+    let adType     = "";
+    let status     = "문의";
+    const consultCount = consultRows.length;
 
     if (consultRows.length > 0) {
-      // 날짜 최신순 정렬
-      consultRows.sort((a, b) => String(b[CONSULT_COL.DATE]).localeCompare(String(a[CONSULT_COL.DATE])));
-      recentConsultDate = String(consultRows[0][CONSULT_COL.DATE] || "");
-      adType = String(consultRows[0][CONSULT_COL.PRODUCT] || "");
-      status = String(consultRows[0][CONSULT_COL.STATUS] || "상담중");
+      consultRows.sort((a, b) =>
+        String(b[CONSULT_COL.DATE]).localeCompare(String(a[CONSULT_COL.DATE]))
+      );
+      recentDate = String(consultRows[0][CONSULT_COL.DATE] || "");
+      adType     = String(consultRows[0][CONSULT_COL.PRODUCT] || "");
+      status     = String(consultRows[0][CONSULT_COL.STATUS] || "상담중");
+      if (consultCount > 0 && status === "문의") status = "상담중";
     }
 
-    // ── 계약관리에서 해당 고객 검색 ──
-    let contractTotal = 0;
-    let contractReceived = 0;
-    let salesStage = consultCount > 0 ? "상담" : "문의";
-
-    const contractRows = contractData.filter(r =>
+    // 계약관리
+    const contractRows = contractAll.filter(r =>
       String(r[CONTRACT_COL.CUSTOMER] || "").trim() === name
     );
+    let contractTotal    = 0;
+    let contractReceived = 0;
+    let salesStage       = consultCount > 0 ? "상담" : "문의";
+
     if (contractRows.length > 0) {
       contractRows.forEach(r => {
         contractTotal    += parseFloat(r[CONTRACT_COL.TOTAL]    || 0);
         contractReceived += parseFloat(r[CONTRACT_COL.RECEIVED] || 0);
       });
       salesStage = "계약";
-      // 완납 여부
-      if (contractTotal > 0 && contractReceived >= contractTotal) {
-        salesStage = "완납";
-      }
+      if (contractTotal > 0 && contractReceived >= contractTotal) salesStage = "완납";
     }
 
-    // ── 수금이력에서 해당 고객 검색 ──
+    // 수금이력
     let totalPaid = 0;
     if (paymentSheet) {
-      const payRows = paymentData.filter(r =>
-        String(r[1] || "").trim() === name // 수금이력 B열 = 고객사
-      );
-      payRows.forEach(r => { totalPaid += parseFloat(r[4] || 0); }); // E열 = 수금액($)
+      paymentAll.filter(r => String(r[1] || "").trim() === name)
+                .forEach(r => { totalPaid += parseFloat(r[4] || 0); });
     }
-
     const unpaid = Math.max(0, contractTotal - Math.max(contractReceived, totalPaid));
 
-    // ── 고객 DB J-R열 업데이트 ──
+    // J-R열 업데이트
     dbSheet.getRange(row, DB_STATUS_COL, 1, 9).setValues([[
       status,
       salesStage,
-      recentConsultDate,
+      recentDate,
       consultCount,
       adType,
-      contractTotal || "",
+      contractTotal    || "",
       totalPaid || contractReceived || "",
-      unpaid || "",
+      unpaid           || "",
       today
     ]]);
   });
 
-  // 6) 완료 메시지
-  Logger.log("✅ 고객 DB 업데이트 완료: " + (lastRow - 1) + "개 고객 상태 갱신");
+  SpreadsheetApp.flush();
+  Logger.log("✅ 고객DB 업데이트 완료 – 총 " + (finalLastRow - 1) + "명 (신규 추가 " + addedCount + "명)");
 }
 
 // Sheet 상단 메뉴에 "씬짜오 CRM" 메뉴 추가
@@ -428,4 +502,35 @@ function onOpen() {
     .createMenu("씬짜오 CRM")
     .addItem("📊 고객 DB 업데이트", "buildCustomerDB")
     .addToUi();
+}
+
+// ────────────────────────────────────────────────────────────
+// Firestore REST API: onlineAlerts 컬렉션에 문서 추가
+// 앱의 onSnapshot이 이 컬렉션을 구독 → 즉각 알림 수신
+// ────────────────────────────────────────────────────────────
+function writeToFirestore(doc) {
+  const PROJECT_ID = "chaovietnam-login";
+  const API_KEY    = "AIzaSyB5av2Ye0MqCb_vQMJkj9fw5HMSGnwqnlw";
+  const url = "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID +
+              "/databases/(default)/documents/onlineAlerts?key=" + API_KEY;
+
+  const payload = {
+    fields: {
+      customer:      { stringValue: doc.customer      || "" },
+      phone:         { stringValue: doc.phone         || "" },
+      date:          { stringValue: doc.date          || "" },
+      contactMethod: { stringValue: doc.contactMethod || "" },
+      createdAt:     { stringValue: doc.createdAt     || new Date().toISOString() },
+    }
+  };
+
+  const options = {
+    method:             "post",
+    contentType:        "application/json",
+    payload:            JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+
+  const res = UrlFetchApp.fetch(url, options);
+  Logger.log("Firestore onlineAlerts 저장 결과: " + res.getResponseCode() + " " + res.getContentText().slice(0, 120));
 }

@@ -8,6 +8,8 @@ import {
   subscribeAll,
   getLeadMeta,
 } from "../services/crmFirestore";
+import { db } from "../firebase";
+import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 import PaymentModal from "./PaymentModal";
 
 /**
@@ -104,7 +106,10 @@ const LeadPipeline = () => {
   const [trash, setTrash] = useState([]);
   const [showTrash, setShowTrash] = useState(false);
   // 수금 입력 모달
-  const [showPaymentModal, setShowPaymentModal] = useState(null); // lead 객체 저장
+  const [showPaymentModal, setShowPaymentModal] = useState(null);
+  // 🆕 온라인 신규 문의 알림
+  const [onlineAlerts, setOnlineAlerts] = useState([]);  // { id, customer, phone, date, contactMethod }
+  const seenLeadIdsRef = useRef(new Set());              // 이미 확인된 lead ID 추적
 
   // 리드 → 휴지통으로 이동 (삭제)
   const deleteLead = async (lead, e) => {
@@ -183,6 +188,62 @@ const LeadPipeline = () => {
   const manualLeadsRef = useRef([]);
   const sheetsLoadedRef = useRef(false); // Sheets 로드 최초 1회 완료 여부
 
+  // 🔔 App.js 30초 폴링 → 신규 온라인 문의 이벤트 수신 (즉각 알림)
+  useEffect(() => {
+    const handleNewOnline = (e) => {
+      const entries = e.detail || [];
+      if (entries.length > 0) {
+        setOnlineAlerts(prev => [
+          ...entries.map(item => ({ id: item.date + item.customer, ...item })),
+          ...prev,
+        ]);
+      }
+    };
+    window.addEventListener('newOnlineInquiry', handleNewOnline);
+    return () => window.removeEventListener('newOnlineInquiry', handleNewOnline);
+  }, []);
+
+  // 🔥 Firestore onlineAlerts 컬렉션 실시간 구독
+  // GAS가 온라인 문의 저장 시 즉시(0초) 알림 수신
+  useEffect(() => {
+    const seenDocIds = new Set();
+    let isFirstSnapshot = true;
+    const q = query(
+      collection(db, 'onlineAlerts'),
+      orderBy('createdAt', 'desc'),
+      limit(30)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const docId = change.doc.id;
+          if (isFirstSnapshot) {
+            seenDocIds.add(docId); // 기존 문서는 알림 제외
+            return;
+          }
+          if (!seenDocIds.has(docId)) {
+            seenDocIds.add(docId);
+            const d = change.doc.data();
+            setOnlineAlerts(prev => [
+              {
+                id: docId,
+                customer: d.customer || '',
+                phone: d.phone || '',
+                date: d.date || '',
+                contactMethod: d.contactMethod || ''
+              },
+              ...prev.filter(a => a.id !== docId),
+            ]);
+          }
+        }
+      });
+      isFirstSnapshot = false;
+    }, (err) => {
+      console.warn('[LeadPipeline] onlineAlerts 구독 오류:', err.message);
+    });
+    return () => unsub();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     // 1) localStorage → Firestore 마이그레이션 (최초 1회)
     migrateFromLocalStorage();
@@ -210,10 +271,15 @@ const LeadPipeline = () => {
       },
     });
 
-    // 3) Google Sheets 로드
+    // 3) Google Sheets 초기 로드
     loadLeadsFromSheet();
 
-    return () => unsubscribe();
+    // 4) 5분마다 자동 새로고침 → 신규 온라인 문의 감지
+    const refreshInterval = setInterval(() => {
+      loadLeadsFromSheet();
+    }, 5 * 60 * 1000);
+
+    return () => { unsubscribe(); clearInterval(refreshInterval); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // CSV 파싱 (gviz 응답용 - 따옴표 포함 필드 처리)
@@ -398,6 +464,32 @@ const LeadPipeline = () => {
       sheetsLoadedRef.current = true;
       setLeads([...manualLeads, ...mergedLeads]);
       setLoading(false);
+
+      // 🔔 오늘 온라인/앱 문의 알림 (항상 표시, 닫은 것만 localStorage에 기억)
+      const todayStr = new Date().toISOString().split('T')[0];
+      // localStorage에서 이미 닫은 알림 ID 목록 로드
+      const dismissedRaw = localStorage.getItem('dismissedOnlineAlerts_' + todayStr) || '[]';
+      const dismissed = new Set(JSON.parse(dismissedRaw));
+
+      const todayOnline = mergedLeads.filter(l => {
+        const method = (l.contactMethod || '').toLowerCase();
+        const isOnline = method.includes('온라인') || method.includes('online') ||
+          method.includes('앱') || method.includes('app');
+        const isToday = (l.date || '').startsWith(todayStr);
+        return isOnline && isToday && !dismissed.has(l.id);
+      });
+
+      if (todayOnline.length > 0) {
+        setOnlineAlerts(
+          todayOnline.map(l => ({
+            id: l.id,
+            customer: l.customer,
+            phone: l.phone,
+            date: l.date,
+            contactMethod: l.contactMethod,
+          }))
+        );
+      }
     } catch (error) {
       console.error("리드 데이터 로드 실패:", error);
       setLoading(false);
@@ -629,7 +721,8 @@ const LeadPipeline = () => {
               .filter(a => !a.done)
               .map(a => ({ ...a, leadId: a.leadId || leadId }));
 
-            // 2) consultationLogs 안의 nextActionDate/nextActionText (기존 데이터 소급 적용)
+            // logActions에서 이미 done 처리된 것 제거
+            const doneLogActions = (leadMeta['manual']?.doneLogActions || []);
             const logActions = (m.consultationLogs || [])
               .filter(log => log.nextActionDate && log.nextActionText?.trim())
               .map(log => ({
@@ -640,10 +733,26 @@ const LeadPipeline = () => {
                 leadId: leadId,
                 fromLog: true,
               }))
-              // savedActions에 이미 같은 내용 있으면 중복 제거
-              .filter(la => !savedActions.find(sa => sa.date === la.date && sa.text === la.text));
+              .filter(la => !savedActions.find(sa => sa.date === la.date && sa.text === la.text))
+              .filter(la => !doneLogActions.some(d => d.date === la.date && d.text === la.text && d.leadId === la.leadId));
 
-            return [...savedActions, ...logActions];
+            // 2) 상담이력 시트 nextStep/nextFollowUpDate 로 직접 등록된 할일
+            //    (GAS 수동 문의 접수 시 NEXT_STEP/NEXT_DATE 컬럼에 저장된 것)
+            const sheetActions = (() => {
+              try {
+                const lead = leads.find(l => l.id === leadId);
+                if (!lead?.nextStep?.trim() || !lead?.nextFollowUpDate?.trim()) return [];
+                const text = lead.nextStep.trim();
+                const date = lead.nextFollowUpDate.trim();
+                // 이미 savedActions/logActions/doneLogActions에 있으면 중복 제거
+                if (savedActions.find(sa => sa.date === date && sa.text === text)) return [];
+                if (logActions.find(la => la.date === date && la.text === text)) return [];
+                if (doneLogActions.some(d => d.date === date && d.text === text && d.leadId === leadId)) return [];
+                return [{ date, text, customer: lead.customer, leadId, fromLog: true }];
+              } catch (e) { return []; }
+            })();
+
+            return [...savedActions, ...logActions, ...sheetActions];
           })
           .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -656,6 +765,7 @@ const LeadPipeline = () => {
         const weekActions = allActions.filter(a => a.date > today && a.date <= weekEnd);
 
         const markDone = async (action) => {
+          // 1) actions 배열에 있는 경우 (일반적 경우)
           const metaKey = Object.keys(leadMeta).find(k =>
             (leadMeta[k].actions || []).some(a => a.date === action.date && a.text === action.text && a.customer === action.customer)
           );
@@ -666,10 +776,24 @@ const LeadPipeline = () => {
                 (a.date === action.date && a.text === action.text && a.customer === action.customer) ? { ...a, done: true } : a
               )
             };
-            // state 낙관적 업데이트
             setLeadMeta(prev => ({ ...prev, [metaKey]: updatedKeyMeta }));
-            // Firestore: 해당 key만 업데이트
             await saveLeadMeta(metaKey, updatedKeyMeta);
+            return;
+          }
+
+          // 2) fromLog=true 인 경우: consultationLogs에서 온 액션 → 'manual' 키에 done 기록 추가
+          //    (consultationLogs 자체를 수정하기 어려우므로 manual.doneLogActions 에 기록)
+          if (action.fromLog) {
+            const manualKey = 'manual';
+            const prev = leadMeta[manualKey] || {};
+            const doneLogActions = prev.doneLogActions || [];
+            // 이미 done 처리된 것은 패스
+            const alreadyDone = doneLogActions.some(d => d.date === action.date && d.text === action.text && d.leadId === action.leadId);
+            if (!alreadyDone) {
+              const updated = { ...prev, doneLogActions: [...doneLogActions, { date: action.date, text: action.text, leadId: action.leadId }] };
+              setLeadMeta(p => ({ ...p, [manualKey]: updated }));
+              await saveLeadMeta(manualKey, updated);
+            }
           }
         };
 
@@ -850,6 +974,47 @@ const LeadPipeline = () => {
 
         return (
           <div style={{ marginBottom: "16px", background: "#fff", border: "2px solid #ff9800", borderRadius: "10px", padding: "16px" }}>
+
+            {/* 🔴 온라인 신규 문의 알림 */}
+            {onlineAlerts.length > 0 && (
+              <div style={{ marginBottom: "12px" }}>
+                {onlineAlerts.map((alert, i) => (
+                  <div key={alert.id + i} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "10px 14px", marginBottom: "6px",
+                    background: "#ffebee", border: "2px solid #f44336",
+                    borderRadius: "8px", cursor: "pointer",
+                  }}
+                    onClick={() => {
+                      // 해당 고객의 lead를 찾아서 상세 모달 열기
+                      const target = leads.find(l => l.id === alert.id || l.customer === alert.customer);
+                      if (target) setSelectedLead(target);
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: "16px", marginRight: "6px" }}>🔴</span>
+                      <strong style={{ color: "#c62828", fontSize: "14px" }}>신규 온라인 광고 문의!</strong>
+                      <span style={{ marginLeft: "10px", fontSize: "13px", color: "#555" }}>
+                        {alert.customer} {alert.phone ? `· ${alert.phone}` : ""} {alert.date ? `· ${alert.date}` : ""}
+                      </span>
+                      <span style={{ marginLeft: "10px", fontSize: "11px", color: "#999" }}>▶ 클릭하면 상담일지 열림</span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation(); // 부모 클릭(모달열기) 방지
+                        const todayKey = 'dismissedOnlineAlerts_' + new Date().toISOString().split('T')[0];
+                        const prev = JSON.parse(localStorage.getItem(todayKey) || '[]');
+                        if (alert.id && !prev.includes(alert.id)) {
+                          localStorage.setItem(todayKey, JSON.stringify([...prev, alert.id]));
+                        }
+                        setOnlineAlerts(p => p.filter((_, idx) => idx !== i));
+                      }}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#f44336", fontWeight: "bold", padding: "0 4px", flexShrink: 0 }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
               <h4 style={{ margin: 0, color: "#e65100", fontSize: "15px" }}>🗓️ 할 일 현황</h4>
               {overdueActions.length > 0 && <span style={{ fontSize: "12px", background: "#ffebee", color: "#c62828", padding: "2px 8px", borderRadius: "10px", fontWeight: "bold" }}>⚠️ 기한 초과 {overdueActions.length}건</span>}
@@ -972,7 +1137,7 @@ const LeadPipeline = () => {
                   {lead.date || "-"}
                 </div>
 
-                {/* 고객명 / 담당자 */}
+                {/* 고객명 / 담당자 / 상담내용 */}
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px", color: "#222" }}>
                     {isUrgent && <span style={{ color: "#f44336", marginRight: "4px" }}>🔴</span>}
@@ -981,6 +1146,17 @@ const LeadPipeline = () => {
                   <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
                     {lead.contact}{lead.position ? ` (${lead.position})` : ""}
                   </div>
+                  {lead.remark && (
+                    <div
+                      title={lead.remark}
+                      style={{
+                        fontSize: "11px", color: "#aaa", marginTop: "2px",
+                        maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                      }}
+                    >
+                      💬 {lead.remark}
+                    </div>
+                  )}
                 </div>
 
                 {/* 전화 */}
@@ -992,7 +1168,7 @@ const LeadPipeline = () => {
                 </div>
 
                 {/* 접수 경로 */}
-                <div style={{ fontSize: "12px", color: "#777" }}>{lead.followUp || "-"}</div>
+                <div style={{ fontSize: "12px", color: "#777" }}>{lead.contactMethod || "-"}</div>
 
                 {/* 단계 배지 */}
                 <div style={{ textAlign: "center" }}>
@@ -1197,15 +1373,78 @@ const LeadDetailModal = ({ lead, onClose, onUpdate, meta = {}, onSaveMeta }) => 
   const [nextStage, setNextStage] = useState("");
   const [nextFollowUpDate, setNextFollowUpDate] = useState("");
 
+  // 문서 자료 보관함
+  const DEFAULT_DOCS = [
+    { id: "price", label: "가격표", icon: "💰", url: "", note: "" },
+    { id: "company", label: "회사 소개서", icon: "🏢", url: "", note: "" },
+    { id: "sample", label: "광고 샘플", icon: "🖼️", url: "", note: "" },
+    { id: "contract", label: "계약서", icon: "📄", url: "", note: "" },
+    { id: "etc1", label: "기타 자료 1", icon: "📎", url: "", note: "" },
+  ];
+  const [docLinks, setDocLinks] = useState(DEFAULT_DOCS);
+  const [docEditMode, setDocEditMode] = useState(false);
+  const [docSaving, setDocSaving] = useState(false);
+
   const stage = SALES_STAGES[lead.stage];
   const consultationLogs = lead.consultationLogs || [];
 
-  // 기존 상담 기록 불러오기
+  // 개별 클라이언트 doc 링크 및 기본 자료 소소 로드
   useEffect(() => {
     if (consultationLogs[0]) setConsultation1({ ...consultationLogs[0], nextActionDate: consultationLogs[0].nextActionDate || "", nextActionText: consultationLogs[0].nextActionText || consultationLogs[0].nextAction || "" });
     if (consultationLogs[1]) setConsultation2({ ...consultationLogs[1], nextActionDate: consultationLogs[1].nextActionDate || "", nextActionText: consultationLogs[1].nextActionText || consultationLogs[1].nextAction || "" });
     if (consultationLogs[2]) setConsultation3({ ...consultationLogs[2], nextActionDate: consultationLogs[2].nextActionDate || "", nextActionText: consultationLogs[2].nextActionText || consultationLogs[2].nextAction || "" });
+    // meta에서 docLinks 구구
+    if (meta?.docLinks && meta.docLinks.length > 0) {
+      setDocLinks(DEFAULT_DOCS.map(d => {
+        const saved = meta.docLinks.find(s => s.id === d.id);
+        return saved ? { ...d, ...saved } : d;
+      }));
+    }
   }, [lead]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSaveDocs = async () => {
+    setDocSaving(true);
+    try {
+      await onSaveMeta({ ...meta, docLinks });
+    } finally {
+      setDocSaving(false);
+      setDocEditMode(false);
+    }
+  };
+
+  const handleEmailWithDocs = async () => {
+    const filledDocs = docLinks.filter(d => d.url?.trim());
+    if (!lead.email) { alert("이메일 주소가 없습니다."); return; }
+    if (filledDocs.length === 0) { alert("보낼 자료가 없습니다. 먼저 ✏️ 편집에서 자료 링크를 등록하세요."); return; }
+    const subject = encodeURIComponent(`[씬짜오 베트남] ${lead.customer} 광고 관련 자료 안내`);
+    const bodyLines = [
+      `안녕하세요, ${lead.contact || lead.customer} 님.`,
+      `씬짜오 베트남 광고 관련 자료를 안내드립니다.`,
+      "",
+      ...filledDocs.map(d => `[${d.icon} ${d.label}]${d.note ? ` (${d.note})` : ""}\n${d.url}`),
+      "",
+      "감사합니다.",
+    ];
+    const body = encodeURIComponent(bodyLines.join("\n"));
+    window.open(`mailto:${lead.email}?subject=${subject}&body=${body}`);
+
+    // ── 발송 이력 기록 ──
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const sentAtKR = `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const newEntry = {
+      sentAt: now.toISOString(),
+      sentAtKR,
+      toEmail: lead.email,
+      docs: filledDocs.map(d => ({ id: d.id, label: d.label, icon: d.icon })),
+    };
+    const updatedMeta = {
+      ...meta,
+      docLinks,
+      docSentHistory: [newEntry, ...(meta?.docSentHistory || [])],
+    };
+    await onSaveMeta(updatedMeta);
+  };
 
   // 현재 단계에서 이동 가능한 다음 단계들 (진행 단계 제거)
   const getAvailableNextStages = () => {
@@ -1490,6 +1729,130 @@ const LeadDetailModal = ({ lead, onClose, onUpdate, meta = {}, onSaveMeta }) => 
             </div>
           </div>
         )}
+
+        {/* 📁 자료 보관함 */}
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <h3 style={{ color: "#1565c0", borderBottom: "3px solid #1976d2", paddingBottom: "8px", margin: 0, flex: 1, paddingRight: "16px" }}>
+              📁 영업 자료 보관함
+            </h3>
+            <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+              {lead.email && (
+                <button
+                  onClick={handleEmailWithDocs}
+                  title="자료 링크를 이메일로 발송"
+                  style={{ padding: "6px 14px", background: "#1976d2", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", cursor: "pointer", fontWeight: "bold" }}
+                >
+                  📧 이메일로 자료 발송
+                </button>
+              )}
+              <button
+                onClick={() => docEditMode ? handleSaveDocs() : setDocEditMode(true)}
+                style={{ padding: "6px 14px", background: docEditMode ? "#4caf50" : "#ff9800", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", cursor: "pointer", fontWeight: "bold" }}
+              >
+                {docSaving ? "저장 중..." : docEditMode ? "💾 저장" : "✏️ 편집"}
+              </button>
+              {docEditMode && (
+                <button
+                  onClick={() => setDocEditMode(false)}
+                  style={{ padding: "6px 14px", background: "#eee", color: "#555", border: "none", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}
+                >
+                  취소
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px", marginTop: "8px" }}>
+            {docLinks.map((doc, idx) => (
+              <div
+                key={doc.id}
+                style={{
+                  padding: "12px 14px",
+                  backgroundColor: doc.url ? "#e3f2fd" : "#f5f5f5",
+                  borderRadius: "8px",
+                  border: `1px solid ${doc.url ? "#90caf9" : "#e0e0e0"}`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: docEditMode ? "8px" : "4px" }}>
+                  <span style={{ fontSize: "16px" }}>{doc.icon}</span>
+                  <span style={{ fontWeight: "bold", fontSize: "13px", color: "#1a237e" }}>{doc.label}</span>
+                  {!docEditMode && doc.url && (
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ marginLeft: "auto", fontSize: "11px", color: "#1976d2", textDecoration: "none", background: "#bbdefb", padding: "2px 8px", borderRadius: "10px" }}
+                    >
+                      열기 →
+                    </a>
+                  )}
+                </div>
+                {docEditMode ? (
+                  <>
+                    <input
+                      type="url"
+                      placeholder="URL 또는 구글드라이브 링크"
+                      value={doc.url}
+                      onChange={e => setDocLinks(prev => prev.map((d, i) => i === idx ? { ...d, url: e.target.value } : d))}
+                      style={{ width: "100%", padding: "6px 8px", border: "1px solid #90caf9", borderRadius: "4px", fontSize: "12px", boxSizing: "border-box", marginBottom: "4px" }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="메모 (예: 2026년 1월 버전)"
+                      value={doc.note}
+                      onChange={e => setDocLinks(prev => prev.map((d, i) => i === idx ? { ...d, note: e.target.value } : d))}
+                      style={{ width: "100%", padding: "6px 8px", border: "1px solid #e0e0e0", borderRadius: "4px", fontSize: "12px", boxSizing: "border-box" }}
+                    />
+                  </>
+                ) : (
+                  <div style={{ fontSize: "11px", color: doc.url ? "#555" : "#bbb", wordBreak: "break-all" }}>
+                    {doc.url ? (
+                      <>
+                        <div style={{ color: "#1976d2", marginBottom: "2px" }}>{doc.url.slice(0, 50)}{doc.url.length > 50 ? "..." : ""}</div>
+                        {doc.note && <div style={{ color: "#888" }}>📝 {doc.note}</div>}
+                      </>
+                    ) : "링크 없음 (편집 버튼으로 추가)"}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {!lead.email && (
+            <div style={{ marginTop: "8px", fontSize: "12px", color: "#bbb" }}>💡 이메일 주소를 등록하면 자료를 이메일로 바로 발송할 수 있습니다.</div>
+          )}
+
+          {/* 📬 자료 발송 이력 */}
+          {(meta?.docSentHistory || []).length > 0 && (
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ fontSize: "12px", fontWeight: "bold", color: "#555", marginBottom: "8px" }}>📬 자료 발송 이력</div>
+              <div style={{ maxHeight: "160px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px" }}>
+                {(meta.docSentHistory).map((entry, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex", alignItems: "flex-start", gap: "10px",
+                      padding: "8px 12px",
+                      background: "#f8f9fa",
+                      borderRadius: "6px",
+                      border: "1px solid #e8eaf6",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <span style={{ color: "#1976d2", minWidth: "120px", flexShrink: 0 }}>📅 {entry.sentAtKR}</span>
+                    <span style={{ color: "#555", minWidth: "110px", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      ✉️ {entry.toEmail}
+                    </span>
+                    <span style={{ color: "#388e3c", flex: 1 }}>
+                      {entry.docs.map(d => `${d.icon} ${d.label}`).join("  ·  ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 상담일지 작성 - 1회차, 2회차, 3회차 */}
         <div style={{ marginBottom: "20px" }}>
@@ -2030,6 +2393,7 @@ const ConsultationLogForm = ({ lead, onClose, onSave }) => {
 const AddLeadForm = ({ onClose, onAdd }) => {
   const GAS_URL = "https://script.google.com/macros/s/AKfycbw1rd5SbMDMSxDYbCarcuJ5chVgcKKQgEvyJfXR0xEpYxs-tP93ZJigYoB6XgDzfoOpGQ/exec";
 
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
     contactMethod: "PHONE",   // 접수경로
@@ -2043,6 +2407,8 @@ const AddLeadForm = ({ onClose, onAdd }) => {
     startDate: "",            // 예상 시작 시기
     remark: "",               // 문의 내용
     salesman: "",             // 입력 담당자 (영업사원)
+    nextActionDate: tomorrow, // 다음 할일 날짜
+    nextActionText: "",       // 다음 할일 내용
   });
 
   const [loading, setLoading] = useState(false);
@@ -2075,10 +2441,12 @@ const AddLeadForm = ({ onClose, onAdd }) => {
           phone: formData.phone,
           email: formData.email,
           contactMethod: contactMethodLabels[formData.contactMethod] + " 문의",
-          remark: formData.remark,      // CONTENT(9) 매핑
+          remark: formData.remark,
           adType: formData.adType,
           memo: formData.salesman ? "담당: " + formData.salesman : "",
           source: "OFFLINE",
+          nextActionText: formData.nextActionText, // NEXT_STEP(11) 저장
+          nextActionDate: formData.nextActionDate, // NEXT_DATE(12) 저장
         }),
       });
       console.log("[AddLeadForm] GAS CONSULT 전송 완료 →", formData.customer);
@@ -2134,7 +2502,7 @@ const AddLeadForm = ({ onClose, onAdd }) => {
         <div style={{ background: "linear-gradient(135deg,#d32f2f,#b71c1c)", padding: "18px 22px", borderRadius: "10px 10px 0 0", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div>
             <div style={{ fontSize: "18px", fontWeight: "bold" }}>📞 신규 광고 문의 접수</div>
-            <div style={{ fontSize: "12px", marginTop: "3px", opacity: 0.85 }}>전화·면담·이메일 문의 → 광고접수인덱스 자동 저장</div>
+            <div style={{ fontSize: "12px", marginTop: "3px", opacity: 0.85 }}>전화·면담·이메일 문의 → 상담이력 탭 자동 저장</div>
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", fontSize: "18px", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer" }}>×</button>
         </div>
@@ -2224,6 +2592,24 @@ const AddLeadForm = ({ onClose, onAdd }) => {
             <input style={inputStyle} value={formData.salesman} onChange={e => set("salesman", e.target.value)} placeholder="예: 이순신" />
             <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>이 문의를 입력하는 영업담당자의 이름을 적어주세요</div>
           </div>
+
+          {/* 다음 할일 */}
+          <div style={{ marginTop: "6px", padding: "14px", background: "#fff3e0", border: "2px solid #ff9800", borderRadius: "8px" }}>
+            <div style={{ ...sectionStyle, borderBottom: "none", marginBottom: "10px", color: "#e65100" }}>📌 다음 할일 (할일현황에 자동 등록)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: "10px" }}>
+              <div>
+                <label style={labelStyle}>날짜</label>
+                <input type="date" style={inputStyle} value={formData.nextActionDate}
+                  onChange={e => set("nextActionDate", e.target.value)} />
+              </div>
+              <div>
+                <label style={labelStyle}>할일 내용</label>
+                <input type="text" style={inputStyle} value={formData.nextActionText}
+                  onChange={e => set("nextActionText", e.target.value)}
+                  placeholder="예: 견적서 발송, 재연락, 명함 보내기" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 저장 버튼 (하단 고정) */}
@@ -2250,7 +2636,7 @@ const AddLeadForm = ({ onClose, onAdd }) => {
               fontSize: "15px", fontWeight: "bold",
             }}
           >
-            {loading ? "저장 중..." : "✅ 접수하기 (광고접수인덱스 저장)"}
+            {loading ? "저장 중..." : "✅ 접수하기"}
           </button>
         </div>
       </div>

@@ -34,7 +34,7 @@ const STATUS_TEXT_COLOR = {
     "문의": "#f57f17",
 };
 
-const CustomerDB = ({ onSelectCustomer }) => {
+const CustomerDB = ({ onSelectCustomer, onCustomersLoaded }) => {
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -81,6 +81,7 @@ const CustomerDB = ({ onSelectCustomer }) => {
                 (row) => row[0] && row[0].trim() !== "" && row[0].trim() !== "고객사"
             );
             setCustomers(dataRows);
+            if (onCustomersLoaded) onCustomersLoaded(dataRows);
         } catch (e) {
             setError(e.message);
         } finally {
