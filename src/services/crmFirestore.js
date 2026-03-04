@@ -129,13 +129,37 @@ export async function saveTrash(items) { await setField("trash", "items", items)
 export async function getManualLeads() { return getField("manualLeads", "leads", []); }
 export async function getLeadMeta() { return getField("leadMeta", "data", {}); }
 
+// ── 발행 일정 (실시간 동기화) ────────────────────────────────────
+/**
+ * 발행 일정 오버라이드를 Firestore에 저장
+ * @param {Object} customOverrides - 기본값과 다른 항목만 저장 {vol: {date, status}}
+ */
+export async function saveVolumeSchedule(customOverrides) {
+    await setField("settings", "volumeSchedule", customOverrides);
+}
+
+/**
+ * 발행 일정 실시간 구독 (onSnapshot)
+ * @param {Function} callback - 스케줄 변경 시 호출 { customOverrides }
+ * @returns unsubscribe 함수
+ */
+export function listenVolumeSchedule(callback) {
+    const unsub = onSnapshot(ref("settings"), (snap) => {
+        if (snap.exists()) {
+            const val = snap.data()["volumeSchedule"] ?? {};
+            console.log("[Firestore] 🔄 발행일정 업데이트:", Object.keys(val).length + "개 항목");
+            callback(val);
+        } else {
+            callback({});
+        }
+    }, (e) => {
+        console.error("[Firestore] ❌ 발행일정 구독 실패:", e.code, e.message);
+    });
+    return unsub;
+}
+
 // ── localStorage → Firestore 자동 병합 마이그레이션 ─────────────
-// 각 컴퓨터가 앱을 열 때마다 localStorage 데이터를 Firestore에 병합하고 삭제합니다.
-// 사용자가 아무것도 할 필요 없습니다.
 export async function migrateFromLocalStorage() {
-    // 2월 27일 마이그레이션 코드가 과거 브라우저에서 실행될 경우, 
-    // 로컬의 옛날 삭제목록/할일목록이 FireStore 상의 최신본을 덮어쓰는 대참사가 발생합니다.
-    // 따라서 이 함수를 완전히 비활성화합니다.
     console.log('[Migration] 좀비 캐시 부활 방지를 위해 마이그레이션을 비활성화함.');
     localStorage.removeItem('crm_migrated_v2');
     localStorage.removeItem('crm_deletedIds');
@@ -143,3 +167,4 @@ export async function migrateFromLocalStorage() {
     localStorage.removeItem('crm_manualLeads');
     localStorage.removeItem('crm_trash');
 }
+

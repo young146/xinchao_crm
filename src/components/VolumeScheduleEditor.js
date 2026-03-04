@@ -4,6 +4,7 @@ import {
   formatDateSimple,
   getCurrentVolume,
 } from "../utils/volumeSchedule";
+import { saveVolumeSchedule, listenVolumeSchedule } from "../services/crmFirestore";
 
 const CHANGE_LOG_KEY = "crm_scheduleChangeLogs";
 
@@ -14,7 +15,15 @@ const CHANGE_LOG_KEY = "crm_scheduleChangeLogs";
  * - 날짜 변경 이력(사유 포함) 저장 및 표시
  */
 const VolumeScheduleEditor = () => {
-  const [schedule, setSchedule] = useState({});
+  const [schedule, setSchedule] = useState(() => {
+    try {
+      const saved = localStorage.getItem("volumeSchedule");
+      const localOverrides = saved ? JSON.parse(saved) : {};
+      return { ...DEFAULT_VOLUME_SCHEDULE, ...localOverrides };
+    } catch {
+      return { ...DEFAULT_VOLUME_SCHEDULE };
+    }
+  });
   const [editingVol, setEditingVol] = useState(null);
   const [editReason, setEditReason] = useState("");
   const [newVolume, setNewVolume] = useState("");
@@ -25,24 +34,21 @@ const VolumeScheduleEditor = () => {
   const [showLogs, setShowLogs] = useState(false);
 
   useEffect(() => {
-    loadSchedule();
     loadChangeLogs();
+    // Firestore 실시간 구독 - 다른 기기 변경시자동 새로고침
+    const unsub = listenVolumeSchedule((firestoreOverrides) => {
+      let localOverrides = {};
+      try {
+        const saved = localStorage.getItem("volumeSchedule");
+        localOverrides = saved ? JSON.parse(saved) : {};
+      } catch { /* ignore */ }
+      // Firestore 우선으로 병합
+      const allOverrides = { ...localOverrides, ...firestoreOverrides };
+      localStorage.setItem("volumeSchedule", JSON.stringify(allOverrides));
+      setSchedule({ ...DEFAULT_VOLUME_SCHEDULE, ...allOverrides });
+    });
+    return () => unsub();
   }, []);
-
-  const loadSchedule = () => {
-    try {
-      const userSchedule = (() => {
-        try {
-          const saved = localStorage.getItem("volumeSchedule");
-          return saved ? JSON.parse(saved) : {};
-        } catch { return {}; }
-      })();
-      setSchedule({ ...DEFAULT_VOLUME_SCHEDULE, ...userSchedule });
-    } catch (error) {
-      console.error("일정 로드 실패:", error);
-      setSchedule({ ...DEFAULT_VOLUME_SCHEDULE });
-    }
-  };
 
   const loadChangeLogs = () => {
     try {
@@ -59,7 +65,7 @@ const VolumeScheduleEditor = () => {
     try {
       const customSchedule = {};
       Object.entries(updatedSchedule).forEach(([vol, info]) => {
-        const baseInfo = DEFAULT_VOLUME_SCHEDULE[vol]; // 하드코딩 기본값 기준 비교
+        const baseInfo = DEFAULT_VOLUME_SCHEDULE[vol];
         if (
           !baseInfo ||
           baseInfo.date !== info.date ||
@@ -68,11 +74,13 @@ const VolumeScheduleEditor = () => {
           customSchedule[vol] = info;
         }
       });
-
+      // localStorage에 저장
       localStorage.setItem("volumeSchedule", JSON.stringify(customSchedule));
       setSchedule(updatedSchedule);
       window.dispatchEvent(new Event("volumeScheduleUpdated"));
-      showMessage("일정이 저장되었습니다!", "success");
+      // Firestore에도 저장 (실시간 동기화)
+      saveVolumeSchedule(customSchedule).catch(e => console.error("Firestore 저장 실패:", e));
+      showMessage("일정이 저장되었습니다! (Firestore 동기화 중)", "success");
     } catch (error) {
       console.error("일정 저장 실패:", error);
       showMessage("저장에 실패했습니다.", "error");

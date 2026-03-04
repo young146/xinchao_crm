@@ -7,8 +7,10 @@ import AddCustomerForm from "./components/AddCustomerForm";
 import VolumeSchedule from "./components/VolumeSchedule";
 import VolumeScheduleEditor from "./components/VolumeScheduleEditor";
 import LeadPipeline from "./components/LeadPipeline";
-import { getContractStatus, getPaymentStatus, CURRENT_VOLUME } from "./utils/contractStatus";
+import { getContractStatus, getPaymentStatus } from "./utils/contractStatus";
+import { getCurrentVolume, DEFAULT_VOLUME_SCHEDULE } from "./utils/volumeSchedule";
 import { parseVolumeRange, parsePrice } from "./utils/dataTransformer";
+import { listenVolumeSchedule } from "./services/crmFirestore";
 
 const Dashboard = () => {
   const [inquiries, setInquiries] = useState([]);
@@ -29,6 +31,7 @@ const Dashboard = () => {
   const [globalSearchTerm, setGlobalSearchTerm] = useState("");
   const [sharedCustomers, setSharedCustomers] = useState([]); // CustomerDB에서 로드한 시트 고객 목록
   const [pipelineLeads, setPipelineLeads] = useState([]);   // LeadPipeline에서 전달받은 문의 목록
+  const [currentVolume, setCurrentVolume] = useState(() => getCurrentVolume()); // 현재 호수 (Firestore 실시간)
 
   // 구글 시트를 TSV 형태로 읽어오는 함수 (쉼표 문제 해결)
   const fetchSheetData = async (sheetId) => {
@@ -110,6 +113,33 @@ const Dashboard = () => {
       window.removeEventListener("volumeScheduleUpdated", handleScheduleUpdate);
       window.removeEventListener("keydown", handleKeyDown);
     };
+  }, []);
+
+  // Firestore 발행일정 실시간 구독 → currentVolume 자동 업데이트
+  useEffect(() => {
+    const unsub = listenVolumeSchedule((firestoreOverrides) => {
+      // Firestore 오버라이드 + localStorage + DEFAULT 병합
+      let localOverrides = {};
+      try {
+        const saved = localStorage.getItem("volumeSchedule");
+        localOverrides = saved ? JSON.parse(saved) : {};
+      } catch { /* ignore */ }
+      const allOverrides = { ...localOverrides, ...firestoreOverrides };
+      localStorage.setItem("volumeSchedule", JSON.stringify(allOverrides));
+      // 날짜 기준으로 현재 호수 재계산
+      const mergedSchedule = { ...DEFAULT_VOLUME_SCHEDULE, ...allOverrides };
+      const today = new Date();
+      let maxVol = null, maxDate = null;
+      Object.entries(mergedSchedule).forEach(([vol, info]) => {
+        const d = new Date(info.date);
+        if (d <= today && (!maxDate || d > maxDate)) {
+          maxDate = d;
+          maxVol = parseInt(vol);
+        }
+      });
+      if (maxVol) setCurrentVolume(maxVol);
+    });
+    return () => unsub();
   }, []);
 
   if (loading)
@@ -311,20 +341,20 @@ const Dashboard = () => {
 
       {/* 고객명단 탭 */}
       {activeTab === "customerdb" && (
-        <>
-          <CustomerDB
-            onSelectCustomer={(row) => setSelectedDBCustomer(row)}
-            onCustomersLoaded={(rows) => setSharedCustomers(rows)}
-          />
-          {selectedDBCustomer && (
-            <CustomerCard
-              customer={selectedDBCustomer}
-              mode="sheet"
-              onClose={() => setSelectedDBCustomer(null)}
-              onSave={() => { setSelectedDBCustomer(null); }}
-            />
-          )}
-        </>
+        <CustomerDB
+          onSelectCustomer={(row) => setSelectedDBCustomer(row)}
+          onCustomersLoaded={(rows) => setSharedCustomers(rows)}
+        />
+      )}
+
+      {/* 고객 상세 카드 - 어느 탭에서나 열릴 수 있음 */}
+      {selectedDBCustomer && (
+        <CustomerCard
+          customer={selectedDBCustomer}
+          mode="sheet"
+          onClose={() => setSelectedDBCustomer(null)}
+          onSave={() => { setSelectedDBCustomer(null); }}
+        />
       )}
 
       {activeTab === "schedule" && (
@@ -382,7 +412,7 @@ const Dashboard = () => {
             const renewals = activeAds
               .map(row => {
                 const { startVol, endVol } = parseVolumeRange(row[9]);
-                const remaining = endVol ? endVol - CURRENT_VOLUME : null;
+                const remaining = endVol ? endVol - currentVolume : null;
                 return { name: row[1], startVol, endVol, remaining, row };
               })
               .filter(c => c.endVol && c.remaining !== null && c.remaining >= 0 && c.remaining <= 3)
@@ -397,13 +427,13 @@ const Dashboard = () => {
                 const unpaid = totalAmount - received;
                 return { name: row[1], endVol, unpaid };
               })
-              .filter(c => c.endVol && CURRENT_VOLUME > c.endVol && c.unpaid > 0);
+              .filter(c => c.endVol && currentVolume > c.endVol && c.unpaid > 0);
 
             if (renewals.length === 0 && expiredUnpaid.length === 0) return null;
 
             return (
               <div style={{ background: "#fff", padding: "20px", borderRadius: "10px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", borderLeft: "5px solid #e67e22" }}>
-                <h3 style={{ color: "#e67e22", margin: "0 0 4px 0" }}>📢 재계약 대상 고객 (Vol {CURRENT_VOLUME} 기준)</h3>
+                <h3 style={{ color: "#e67e22", margin: "0 0 4px 0" }}>📢 재계약 대상 고객 (Vol {currentVolume} 기준)</h3>
                 <p style={{ color: "#888", fontSize: "13px", margin: "0 0 14px 0" }}>4호 이내 계약 만료 또는 만료+미수금 고객에게 재계약을 제안하세요.</p>
                 {renewals.length > 0 && (
                   <div style={{ marginBottom: expiredUnpaid.length > 0 ? "14px" : 0 }}>
@@ -592,7 +622,21 @@ const Dashboard = () => {
                           transition: "background-color 0.2s",
                           cursor: "pointer"
                         }}
-                        onClick={() => setSelectedCustomer(row)}
+                        onClick={() => {
+                          // 고객DB(sharedCustomers)에서 같은 고객명 찾기 → SheetCustomerCard 열기
+                          const name = (row[1] || "").trim().toLowerCase();
+                          const dbRow = sharedCustomers.find(r => (r[0] || "").trim().toLowerCase() === name);
+                          if (dbRow) {
+                            setSelectedDBCustomer(dbRow);
+                          } else {
+                            setSelectedDBCustomer([
+                              row[1] || "", row[4] || "", "", row[3] || "", "",
+                              row[2] || "", "", "", "", "", "", "", "",
+                              row[5] || "", "", "", "", ""
+                            ]);
+                          }
+                        }}
+                        title="클릭 시 고객 상세 카드 열기"
                         onMouseEnter={(e) => {
                           e.currentTarget.style.backgroundColor = "#e3f2fd";
                           e.currentTarget.style.transform = "scale(1.01)";
