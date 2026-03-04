@@ -1,16 +1,9 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import {
   saveDeletedIds,
-  addDeletedId,
-  removeDeletedId,
   saveLeadMeta as fsaveLeadMeta,
   getManualLeads, saveManualLeads,
-  saveManualLead,
-  deleteManualLead,
   saveTrash,
-  addTrashItem,
-  removeTrashItem,
-  clearAllTrash,
   migrateFromLocalStorage,
   subscribeAll,
   getLeadMeta,
@@ -126,11 +119,11 @@ const LeadPipeline = () => {
     const trashedItem = { ...lead, deletedAt: new Date().toISOString() };
     const nextTrash = [trashedItem, ...trash];
     setTrash(nextTrash);
-    await addTrashItem(trashedItem);
+    await saveTrash(nextTrash);
     // deletedIds에도 추가 (화면 필터용)
     const next = [...deletedIds, lead.id];
     setDeletedIds(next);
-    await addDeletedId(lead.id);
+    await saveDeletedIds(next);
     // leads state에서도 제거
     setLeads(prev => prev.filter(l => l.id !== lead.id));
   };
@@ -139,18 +132,18 @@ const LeadPipeline = () => {
   const restoreFromTrash = async (item) => {
     const nextTrash = trash.filter(t => t.id !== item.id);
     setTrash(nextTrash);
-    await removeTrashItem(item.id);
+    await saveTrash(nextTrash);
     // deletedIds에서 제거
     const nextDeleted = deletedIds.filter(id => id !== item.id);
     setDeletedIds(nextDeleted);
-    await removeDeletedId(item.id);
+    await saveDeletedIds(nextDeleted);
     // 복원할 리드 준비
     const restoredLead = { ...item };
     delete restoredLead.deletedAt;
     // 수동 추가 리드는 manualLeads에도 복원
     if (item.id.startsWith('manual-')) {
       const prevManual = await getManualLeads();
-      await saveManualLead(restoredLead);
+      await saveManualLeads([restoredLead, ...prevManual]);
     }
     setLeads(prev => [restoredLead, ...prev]);
   };
@@ -160,10 +153,11 @@ const LeadPipeline = () => {
     if (!window.confirm(`"${item.customer}"를 영구 삭제할까요?\n복원이 불가능합니다.`)) return;
     const nextTrash = trash.filter(t => t.id !== item.id);
     setTrash(nextTrash);
-    await removeTrashItem(item.id);
+    await saveTrash(nextTrash);
     // 수동 추가 리드면 manualLeads에서도 제거
     if (item.id.startsWith('manual-')) {
-      await deleteManualLead(item.id);
+      const prevManual = await getManualLeads();
+      await saveManualLeads(prevManual.filter(l => l.id !== item.id));
     }
   };
 
@@ -173,12 +167,11 @@ const LeadPipeline = () => {
     // 수동 추가 리드 manualLeads에서 제거
     const manualTrashIds = new Set(trash.filter(t => t.id.startsWith('manual-')).map(t => t.id));
     if (manualTrashIds.size > 0) {
-      for (const tid of manualTrashIds) {
-        await deleteManualLead(tid);
-      }
+      const prevManual = await getManualLeads();
+      await saveManualLeads(prevManual.filter(l => !manualTrashIds.has(l.id)));
     }
-    await clearAllTrash(trash);
     setTrash([]);
+    await saveTrash([]);
   };
 
   // 리드 메타 저장 (다음일정, ToDo) → Firestore
