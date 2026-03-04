@@ -406,6 +406,57 @@ const Dashboard = () => {
       {activeTab === "filler" && <DataFiller />}
 
       {activeTab === "dashboard" && (<>
+        {/* 🆕 신규 계약 고객 패널 - 기준 vol부터 새로 광고 계약을 한 고객 목록 */}
+        {(() => {
+          const newContracts = activeAds
+            .map(row => {
+              const { startVol, endVol } = parseVolumeRange(row[9]);
+              return { name: row[1], startVol, endVol, size: row[5], phone: row[3], row };
+            })
+            .filter(c => c.startVol >= currentVolume)
+            .sort((a, b) => a.startVol - b.startVol);
+          return (
+            <div style={{ marginBottom: "20px", background: "#fff", padding: "20px", borderRadius: "10px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", borderLeft: "5px solid #4caf50" }}>
+              <h3 style={{ color: "#2e7d32", margin: "0 0 4px 0" }}>🆕 신규 광고 계약 고객 (Vol {currentVolume} 기준)</h3>
+              <p style={{ color: "#888", fontSize: "13px", margin: "0 0 14px 0" }}>Vol {currentVolume} 이후에 새로 광고 계약을 시작한 고객 명단입니다.</p>
+              {newContracts.length === 0 ? (
+                <div style={{ color: "#aaa", fontSize: "13px", padding: "12px", background: "#f9f9f9", borderRadius: "6px", textAlign: "center" }}>
+                  Vol {currentVolume} 기준 신규 계약 고객이 없습니다.
+                </div>
+              ) : (
+                newContracts.map((c, i) => (
+                  <div
+                    key={i}
+                    onClick={() => {
+                      const name = (c.name || "").trim().toLowerCase();
+                      const dbRow = sharedCustomers.find(r => (r[0] || "").trim().toLowerCase() === name);
+                      if (dbRow) setSelectedDBCustomer(dbRow);
+                      else setSelectedDBCustomer([c.name || "", "", "", "", "", "", "", "", "", "", "", "", "", c.size || "", "", "", "", ""]);
+                    }}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#e8f5e9", borderRadius: "6px", marginBottom: "5px", border: "1px solid #a5d6a7", cursor: "pointer", transition: "background 0.2s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#c8e6c9"}
+                    onMouseLeave={e => e.currentTarget.style.background = "#e8f5e9"}
+                    title="클릭 시 고객 카드 열기"
+                  >
+                    <div>
+                      <strong style={{ color: "#2e7d32" }}>{c.name}</strong>
+                      {c.size && <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>📐 {c.size}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {c.endVol && (
+                        <span style={{ fontSize: "12px", color: "#555" }}>Vol {c.startVol}~{c.endVol}</span>
+                      )}
+                      <span style={{ fontSize: "11px", fontWeight: "bold", background: c.startVol === currentVolume ? "#4caf50" : "#81c784", color: "#fff", padding: "2px 10px", borderRadius: "10px" }}>
+                        {c.startVol === currentVolume ? "🆕 이번호 시작" : `Vol ${c.startVol} 시작`}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })()}
+
         {/* 재계약 알림 패널 - 발행호 기준 4호 이내 만료 또는 만료+미수금 고객 */}
         <div style={{ marginBottom: "30px" }}>
           {(() => {
