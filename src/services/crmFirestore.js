@@ -10,189 +10,146 @@
  */
 
 import { db } from "../firebase";
-import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc } from "firebase/firestore";
 
-const COL = "xinchao_crm";
-const ref = (docId) => doc(db, COL, docId);
-
-// ── 쓰기 (변경 시 저장) ─────────────────────────────────────────
-async function setField(docId, field, value) {
-    try {
-        // Firestore는 undefined를 허용하지 않으므로 JSON으로 sanitize
-        const sanitized = JSON.parse(JSON.stringify(value ?? null));
-        await setDoc(ref(docId), { [field]: sanitized }, { merge: true });
-        console.log(`[Firestore] ✅ ${docId} 저장 완료`);
-    } catch (e) {
-        console.error(`[Firestore] ❌ ${docId} 저장 실패:`, e.code, e.message);
-    }
-}
-
-// ── 읽기 (1회용, 초기 마이그레이션용) ──────────────────────────
-async function getField(docId, field, fallback) {
-    try {
-        const snap = await getDoc(ref(docId));
-        if (snap.exists()) return snap.data()[field] ?? fallback;
-        return fallback;
-    } catch (e) {
-        console.error(`[Firestore] ❌ ${docId} 읽기 실패:`, e.code, e.message);
-        return fallback;
-    }
-}
+// 새 컬렉션 구조 (기존 단일 문서 병목 해결)
+const COLS = {
+    deletedIds: "crm_deleted_ids",
+    leadMeta: "crm_leads_meta",
+    manualLeads: "crm_manual_leads",
+    trash: "crm_trash"
+};
 
 // ── 실시간 리스너 (onSnapshot) ──────────────────────────────────
 /**
- * 4개의 Firestore 문서를 실시간 구독합니다.
- * 다른 기기에서 변경하면 자동으로 콜백이 실행됩니다.
- *
- * @param {Object} callbacks
- *   { onDeletedIds, onLeadMeta, onManualLeads, onTrash }
- * @returns unsubscribe 함수 (컴포넌트 unmount 시 호출)
+ * 4개의 Firestore 컬렉션을 실시간 구독합니다.
+ * @param {Object} callbacks { onDeletedIds, onLeadMeta, onManualLeads, onTrash }
+ * @returns unsubscribe 함수 
  */
 export function subscribeAll({ onDeletedIds, onLeadMeta, onManualLeads, onTrash }) {
     const unsubFns = [];
 
-    const subscribe = (docId, field, fallback, callback) => {
-        const unsub = onSnapshot(ref(docId), (snap) => {
-            if (snap.exists()) {
-                const val = snap.data()[field] ?? fallback;
-                console.log(`[Firestore] 🔄 ${docId} 업데이트:`, val);
-                callback(val);
-            } else {
-                callback(fallback);
-            }
-        }, (e) => {
-            console.error(`[Firestore] ❌ ${docId} 구독 실패:`, e.code, e.message);
-        });
-        unsubFns.push(unsub);
-    };
+    // deletedIds 컬렉션 구독 (각 문서의 id가 곧 삭제된 리드 id)
+    const unsubDeleted = onSnapshot(collection(db, COLS.deletedIds), (snap) => {
+        const ids = snap.docs.map(doc => doc.id);
+        onDeletedIds(ids);
+    }, (e) => console.error(`[Firestore] ❌ deletedIds 구독 실패:`, e));
+    unsubFns.push(unsubDeleted);
 
-    subscribe("deletedIds", "ids", [], onDeletedIds);
-    subscribe("leadMeta", "data", {}, onLeadMeta);
-    subscribe("manualLeads", "leads", [], onManualLeads);
-    subscribe("trash", "items", [], onTrash);
+    // leadMeta 컬렉션 구독 (각 문서가 한 고객의 메타데이터)
+    const unsubMeta = onSnapshot(collection(db, COLS.leadMeta), (snap) => {
+        const metaObj = {};
+        snap.forEach(doc => { metaObj[doc.id] = doc.data(); });
+        onLeadMeta(metaObj);
+    }, (e) => console.error(`[Firestore] ❌ leadMeta 구독 실패:`, e));
+    unsubFns.push(unsubMeta);
 
-    // 전체 구독 해제 함수 반환
+    // manualLeads 구독 
+    const unsubManual = onSnapshot(collection(db, COLS.manualLeads), (snap) => {
+        const leads = snap.docs.map(doc => doc.data());
+        onManualLeads(leads);
+    }, (e) => console.error(`[Firestore] ❌ manualLeads 구독 실패:`, e));
+    unsubFns.push(unsubManual);
+
+    // trash 구독
+    const unsubTrash = onSnapshot(collection(db, COLS.trash), (snap) => {
+        const items = snap.docs.map(doc => doc.data());
+        onTrash(items);
+    }, (e) => console.error(`[Firestore] ❌ trash 구독 실패:`, e));
+    unsubFns.push(unsubTrash);
+
     return () => unsubFns.forEach(fn => fn());
 }
 
-// ── 저장 함수들 ─────────────────────────────────────────────────
-export async function saveDeletedIds(ids) { await setField("deletedIds", "ids", ids); }
+// ── 저장 함수들 (개별 문서 단위 저장) ──────────────────────────
+
+export async function saveDeletedIds(ids) {
+    // Pipeline에서 넘겨주는 ids 배열 대신, 추가/삭제 시 개별 호출을 권장하지만 
+    // 기존 호환성을 위해 ids 배열을 받아 컬렉션을 동기화합니다. (주의: 전체 목록 교체)
+    // 안전을 위해, 새로 추가된 것만 setDoc 처리하는 구조 추천
+    // 본래는 단일 setDoc을 위해 ids를 던졌음
+    // 여기서는 간단히 전체 덮어쓰기 로직 대신 에러 방지만 해둠 (Pipeline.js에서 활용 로직 변경 필요)
+}
+
+// 개별 삭제/작성용 헬퍼
+export async function addDeletedId(leadId) {
+    await setDoc(doc(db, COLS.deletedIds, leadId), { deletedAt: new Date().toISOString() });
+}
+export async function removeDeletedId(leadId) {
+    await deleteDoc(doc(db, COLS.deletedIds, leadId));
+}
+
+// Trash
+export async function addTrashItem(item) {
+    const sanitized = JSON.parse(JSON.stringify(item ?? null));
+    await setDoc(doc(db, COLS.trash, item.id), sanitized);
+}
+export async function removeTrashItem(itemId) {
+    await deleteDoc(doc(db, COLS.trash, itemId));
+}
+export async function clearAllTrash(currentTrashItems) {
+    // 모든 항목 개별 삭제
+    const promises = currentTrashItems.map(item => deleteDoc(doc(db, COLS.trash, item.id)));
+    await Promise.all(promises);
+}
+// 하위호환
+export async function saveTrash(items) {
+    // 더이상 한방에 여러 개를 저장하는 함수 사용 지양
+}
+
+// Manual Leads
+export async function saveManualLead(lead) {
+    const sanitized = JSON.parse(JSON.stringify(lead ?? null));
+    await setDoc(doc(db, COLS.manualLeads, lead.id), sanitized);
+}
+export async function deleteManualLead(leadId) {
+    await deleteDoc(doc(db, COLS.manualLeads, leadId));
+}
+export async function saveManualLeads(leads) {
+    // 하위 호환용 껍데기
+}
 
 /**
- * saveLeadMeta - 리드 메타 안전 저장
- *
- * 호출 방식 A: saveLeadMeta(leadId, singleMeta)
- *   → Firestore의 leadMeta.data[leadId] 만 업데이트 (다른 리드 데이터 보존)
- *   → dot-notation 필드 경로 사용: { "data.lead-xx": singleMeta }
- *
- * 호출 방식 B: saveLeadMeta(fullDataObject)  (하위 호환, fullData는 객체)
- *   → 전체 data 필드 덮어쓰기 (가급적 사용 자제)
+ * saveLeadMeta - 리드 메타 개별 컬렉션 저장
  */
-export async function saveLeadMeta(leadIdOrFullData, singleMeta) {
+export async function saveLeadMeta(leadId, metaObject) {
+    if (!leadId) return;
     try {
-        if (typeof leadIdOrFullData === "string" && singleMeta !== undefined) {
-            const leadId = leadIdOrFullData;
-            const sanitized = JSON.parse(JSON.stringify(singleMeta ?? null));
-
-            // ✅ updateDoc + dot-notation: data 필드 내부의 단일 key만 업데이트
-            // 다른 lead key들은 절대 건드리지 않음
-            // (setDoc+merge:true는 중첩 Map을 통째로 교체하므로 사용 금지)
-            try {
-                await updateDoc(ref("leadMeta"), { [`data.${leadId}`]: sanitized });
-                console.log(`[Firestore] ✅ leadMeta[${leadId}] 저장 완료`);
-            } catch (innerErr) {
-                if (innerErr.code === "not-found") {
-                    // 문서가 없는 경우에만 setDoc으로 생성 (첫 실행 시)
-                    await setDoc(ref("leadMeta"), { data: { [leadId]: sanitized } });
-                    console.log(`[Firestore] ✅ leadMeta 신규 생성 후 저장: ${leadId}`);
-                } else {
-                    throw innerErr;
-                }
-            }
-        } else {
-            // 하위호환: 전체 data 교체 (마이그레이션 전용)
-            const sanitized = JSON.parse(JSON.stringify(leadIdOrFullData ?? {}));
-            await setDoc(ref("leadMeta"), { data: sanitized }, { merge: true });
-            console.log(`[Firestore] ✅ leadMeta 전체 저장 완료`);
-        }
+        const sanitized = JSON.parse(JSON.stringify(metaObject ?? {}));
+        await setDoc(doc(db, COLS.leadMeta, leadId), sanitized, { merge: true });
+        console.log(`[Firestore] ✅ leadMeta[${leadId}] 개별 저장 완료`);
     } catch (e) {
         console.error(`[Firestore] ❌ leadMeta 저장 실패:`, e.code, e.message);
     }
 }
 
-
-
-export async function saveManualLeads(leads) { await setField("manualLeads", "leads", leads); }
-export async function saveTrash(items) { await setField("trash", "items", items); }
-
 // ── 1회 읽기 (마이그레이션 전용) ────────────────────────────────
-export async function getManualLeads() { return getField("manualLeads", "leads", []); }
-export async function getLeadMeta() { return getField("leadMeta", "data", {}); }
+export async function getManualLeads() {
+    const snap = await getDocs(collection(db, COLS.manualLeads));
+    return snap.docs.map(d => d.data());
+}
+export async function getLeadMeta() {
+    const snap = await getDocs(collection(db, COLS.leadMeta));
+    const meta = {};
+    snap.forEach(d => { meta[d.id] = d.data(); });
+    // 구버전 문서 호환 병합
+    try {
+        const oldSnap = await getDoc(doc(db, 'xinchao_crm', 'leadMeta'));
+        if (oldSnap.exists() && oldSnap.data().data) {
+            return { ...oldSnap.data().data, ...meta }; // 새 문서가 우선
+        }
+    } catch (e) { }
+    return meta;
+}
 
 // ── localStorage → Firestore 자동 병합 마이그레이션 ─────────────
-// 각 컴퓨터가 앱을 열 때마다 localStorage 데이터를 Firestore에 병합하고 삭제합니다.
-// 사용자가 아무것도 할 필요 없습니다.
+// ── 좀비 데이터 방지용 무효화 ─────────────────────────────────────
 export async function migrateFromLocalStorage() {
-    // 이미 이 브라우저에서 마이그레이션 완료했으면 스킵
-    if (localStorage.getItem('crm_migrated_v2') === 'done') return;
-
-    console.log('[Migration] localStorage → Firestore 병합 시작...');
-
-    try {
-        // 1) deletedIds 병합: localStorage + Firestore 합집합
-        const lsIds = JSON.parse(localStorage.getItem('crm_deletedIds') || '[]');
-        if (lsIds.length > 0) {
-            const snap = await getDoc(ref('deletedIds'));
-            const fsIds = snap.exists() ? (snap.data().ids || []) : [];
-            const merged = [...new Set([...fsIds, ...lsIds])]; // 중복 제거 합집합
-            await setField('deletedIds', 'ids', merged);
-            console.log(`[Migration] deletedIds 병합: ${fsIds.length}개 + ${lsIds.length}개 → ${merged.length}개`);
-        }
-
-        // 2) trash 병합: localStorage + Firestore 합집합 (id 기준 중복 제거)
-        const lsTrash = JSON.parse(localStorage.getItem('crm_trash') || '[]');
-        if (lsTrash.length > 0) {
-            const snap = await getDoc(ref('trash'));
-            const fsTrash = snap.exists() ? (snap.data().items || []) : [];
-            const trashMap = new Map();
-            [...fsTrash, ...lsTrash].forEach(item => trashMap.set(item.id, item));
-            const merged = [...trashMap.values()];
-            await setField('trash', 'items', merged);
-            console.log(`[Migration] trash 병합: ${fsTrash.length}개 + ${lsTrash.length}개 → ${merged.length}개`);
-        }
-
-        // 3) leadMeta 병합: Firestore 우선, localStorage로 보완
-        const lsMeta = JSON.parse(localStorage.getItem('crm_leadMeta') || '{}');
-        if (Object.keys(lsMeta).length > 0) {
-            const snap = await getDoc(ref('leadMeta'));
-            const fsMeta = snap.exists() ? (snap.data().data || {}) : {};
-            const merged = { ...lsMeta, ...fsMeta }; // Firestore 값 우선
-            await setField('leadMeta', 'data', merged);
-            console.log(`[Migration] leadMeta 병합 완료`);
-        }
-
-        // 4) manualLeads 병합
-        const lsManual = JSON.parse(localStorage.getItem('crm_manualLeads') || '[]');
-        if (lsManual.length > 0) {
-            const snap = await getDoc(ref('manualLeads'));
-            const fsManual = snap.exists() ? (snap.data().leads || []) : [];
-            const manualMap = new Map();
-            [...lsManual, ...fsManual].forEach(l => manualMap.set(l.id, l));
-            const merged = [...manualMap.values()];
-            await setField('manualLeads', 'leads', merged);
-            console.log(`[Migration] manualLeads 병합 완료`);
-        }
-
-        // 마이그레이션 완료 표시 (이 브라우저에서 다시 안 함)
-        localStorage.setItem('crm_migrated_v2', 'done');
-        // 구 localStorage 데이터 삭제
-        localStorage.removeItem('crm_deletedIds');
-        localStorage.removeItem('crm_leadMeta');
-        localStorage.removeItem('crm_manualLeads');
-        localStorage.removeItem('crm_trash');
-        console.log('[Migration] ✅ 완료 - localStorage 정리됨');
-
-    } catch (e) {
-        console.error('[Migration] ❌ 실패:', e.message);
-    }
+    // 2월 27일 코드로 인해 과거 데이터가 최신 DB를 덮어쓰는 재앙 확인. 
+    // 이제 마이그레이션 코드를 완전히 제거. 
+    console.log('[Migration] 좀비화 방지를 위해 마이그레이션 완전 불능화.');
+    localStorage.removeItem('crm_deletedIds');
+    localStorage.removeItem('crm_leadMeta');
+    localStorage.removeItem('crm_manualLeads');
+    localStorage.removeItem('crm_trash');
 }

@@ -1,9 +1,16 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import {
   saveDeletedIds,
+  addDeletedId,
+  removeDeletedId,
   saveLeadMeta as fsaveLeadMeta,
   getManualLeads, saveManualLeads,
+  saveManualLead,
+  deleteManualLead,
   saveTrash,
+  addTrashItem,
+  removeTrashItem,
+  clearAllTrash,
   migrateFromLocalStorage,
   subscribeAll,
   getLeadMeta,
@@ -119,11 +126,11 @@ const LeadPipeline = () => {
     const trashedItem = { ...lead, deletedAt: new Date().toISOString() };
     const nextTrash = [trashedItem, ...trash];
     setTrash(nextTrash);
-    await saveTrash(nextTrash);
+    await addTrashItem(trashedItem);
     // deletedIds에도 추가 (화면 필터용)
     const next = [...deletedIds, lead.id];
     setDeletedIds(next);
-    await saveDeletedIds(next);
+    await addDeletedId(lead.id);
     // leads state에서도 제거
     setLeads(prev => prev.filter(l => l.id !== lead.id));
   };
@@ -132,18 +139,18 @@ const LeadPipeline = () => {
   const restoreFromTrash = async (item) => {
     const nextTrash = trash.filter(t => t.id !== item.id);
     setTrash(nextTrash);
-    await saveTrash(nextTrash);
+    await removeTrashItem(item.id);
     // deletedIds에서 제거
     const nextDeleted = deletedIds.filter(id => id !== item.id);
     setDeletedIds(nextDeleted);
-    await saveDeletedIds(nextDeleted);
+    await removeDeletedId(item.id);
     // 복원할 리드 준비
     const restoredLead = { ...item };
     delete restoredLead.deletedAt;
     // 수동 추가 리드는 manualLeads에도 복원
     if (item.id.startsWith('manual-')) {
       const prevManual = await getManualLeads();
-      await saveManualLeads([restoredLead, ...prevManual]);
+      await saveManualLead(restoredLead);
     }
     setLeads(prev => [restoredLead, ...prev]);
   };
@@ -153,11 +160,10 @@ const LeadPipeline = () => {
     if (!window.confirm(`"${item.customer}"를 영구 삭제할까요?\n복원이 불가능합니다.`)) return;
     const nextTrash = trash.filter(t => t.id !== item.id);
     setTrash(nextTrash);
-    await saveTrash(nextTrash);
+    await removeTrashItem(item.id);
     // 수동 추가 리드면 manualLeads에서도 제거
     if (item.id.startsWith('manual-')) {
-      const prevManual = await getManualLeads();
-      await saveManualLeads(prevManual.filter(l => l.id !== item.id));
+      await deleteManualLead(item.id);
     }
   };
 
@@ -167,11 +173,12 @@ const LeadPipeline = () => {
     // 수동 추가 리드 manualLeads에서 제거
     const manualTrashIds = new Set(trash.filter(t => t.id.startsWith('manual-')).map(t => t.id));
     if (manualTrashIds.size > 0) {
-      const prevManual = await getManualLeads();
-      await saveManualLeads(prevManual.filter(l => !manualTrashIds.has(l.id)));
+      for (const tid of manualTrashIds) {
+        await deleteManualLead(tid);
+      }
     }
+    await clearAllTrash(trash);
     setTrash([]);
-    await saveTrash([]);
   };
 
   // 리드 메타 저장 (다음일정, ToDo) → Firestore
@@ -363,13 +370,16 @@ const LeadPipeline = () => {
           const dateVal = (row[1] || "").trim();
           const memoVal = (row[20] || "").trim();
 
-          // ── 안정적 ID 생성 (Sheet 교체·행 순서 변경에도 불변) ──
-          // 고객사명 + 날짜를 조합 → 같은 고객이면 항상 동일 ID
-          // prefix를 'lead-'로 유지하여 기존 Firestore 데이터와 하위 호환
+          // ── 안정적 ID 생성 (무적 파싱) ──
+          // 접촉일에서 오직 '숫자'만 8자리 추출 (예: 2026. 2. 15 -> 20260215)
+          const rawDate = dateVal.replace(/[^0-9]/g, "");
+          // 4자리 이하면 연도만 쓴 경우, 모자라면 0101 채움 (사실상 예외처리)
+          const safeDate = rawDate.length >= 8 ? rawDate.slice(0, 8) : (rawDate + "0101").slice(0, 8);
+          // 고객사명: 띄어쓰기, (주), 모든 특수문자 완벽 제거 후 압착
           const customerKey = (row[2] || "unknown").trim()
-            .replace(/\s+/g, "_")
-            .replace(/[^a-zA-Z0-9가-힣_]/g, "");
-          const dateKey = dateVal.replace(/-/g, "").slice(0, 8) || "nodate";
+            .replace(/\(주\)|주식회사|\s+/g, "")
+            .replace(/[^a-zA-Z0-9가-힣]/g, "");
+          const dateKey = safeDate || "nodate";
           const stableId = `lead-${customerKey}-${dateKey}`;
 
           return {
@@ -429,9 +439,21 @@ const LeadPipeline = () => {
       });
 
       const mergedLeads = parsedLeads.map(lead => {
-        // 1) 새 형식 ID로 직접 매칭 (우선)
+        // 1) 완전히 새 형식 ID로 매칭 (우선)
         let m = storedMeta[lead.id] || {};
-        // 2) 구 형식 ID 데이터를 고객명으로 역방향 매핑 (병합)
+
+        // 2) 만약 새 형식 ID로 데이터가 없으면, 고객사 이름 (압착버전)으로 과거 데이터를 뒤짐
+        // 이로써 어제 형식을 바꿔 날아갔던 데이터도 전부 다시 부착됨
+        if (Object.keys(m).length === 0) {
+          const safeCustomerName = lead.customer.trim().replace(/\(주\)|주식회사|\s+/g, "").replace(/[^a-zA-Z0-9가-힣]/g, "");
+          // 저장된 메타의 고객명과 비교
+          const foundOldKey = Object.keys(customerNameToOldMeta).find(k => k.trim().replace(/\(주\)|주식회사|\s+/g, "").replace(/[^a-zA-Z0-9가-힣]/g, "") === safeCustomerName);
+          if (foundOldKey) {
+            m = customerNameToOldMeta[foundOldKey];
+          }
+        }
+
+        // 3) 구 형식 ID 데이터를 고객명으로 역방향 매핑 (병합 보조용)
         const oldMeta = customerNameToOldMeta[lead.customer] || {};
         // 상담 로그 병합: 구 데이터 + 새 데이터 (중복 제거)
         const mergedLogs = [
