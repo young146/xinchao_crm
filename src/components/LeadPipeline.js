@@ -6,10 +6,8 @@ import {
   saveTrash,
   migrateFromLocalStorage,
   subscribeAll,
-  getLeadMeta,
 } from "../services/crmFirestore";
 import { db } from "../firebase";
-import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 import PaymentModal from "./PaymentModal";
 
 /**
@@ -187,6 +185,11 @@ const LeadPipeline = () => {
   // manualLeads는 loadLeadsFromSheet에서 필요하므로 ref로 관리
   const manualLeadsRef = useRef([]);
   const sheetsLoadedRef = useRef(false); // Sheets 로드 최초 1회 완료 여부
+  // ✅ leadMetaRef: onSnapshot이 업데이트할 때마다 최신값 유지
+  // setInterval 클로저나 비동기 함수에서 항상 최신 leadMeta를 참조하기 위해 사용
+  const leadMetaRef = useRef({});
+  // ✅ loadLeadsFromSheetRef: setInterval이 항상 최신 함수를 호출하도록
+  const loadLeadsFromSheetRef = useRef(null);
 
   // 🔔 App.js 30초 폴링 → 신규 온라인 문의 이벤트 수신 (즉각 알림)
   useEffect(() => {
@@ -203,46 +206,12 @@ const LeadPipeline = () => {
     return () => window.removeEventListener('newOnlineInquiry', handleNewOnline);
   }, []);
 
-  // 🔥 Firestore onlineAlerts 컬렉션 실시간 구독
-  // GAS가 온라인 문의 저장 시 즉시(0초) 알림 수신
-  useEffect(() => {
-    const seenDocIds = new Set();
-    let isFirstSnapshot = true;
-    const q = query(
-      collection(db, 'onlineAlerts'),
-      orderBy('createdAt', 'desc'),
-      limit(30)
-    );
-    const unsub = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added') {
-          const docId = change.doc.id;
-          if (isFirstSnapshot) {
-            seenDocIds.add(docId); // 기존 문서는 알림 제외
-            return;
-          }
-          if (!seenDocIds.has(docId)) {
-            seenDocIds.add(docId);
-            const d = change.doc.data();
-            setOnlineAlerts(prev => [
-              {
-                id: docId,
-                customer: d.customer || '',
-                phone: d.phone || '',
-                date: d.date || '',
-                contactMethod: d.contactMethod || ''
-              },
-              ...prev.filter(a => a.id !== docId),
-            ]);
-          }
-        }
-      });
-      isFirstSnapshot = false;
-    }, (err) => {
-      console.warn('[LeadPipeline] onlineAlerts 구독 오류:', err.message);
-    });
-    return () => unsub();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // ℹ️ onlineAlerts Firestore 구독 제거:
+  // chaovietnam-login 프로젝트에 onlineAlerts 컬렉션이 없어
+  // permission-denied → FIRESTORE INTERNAL ASSERTION FAILED 크래시 발생
+  // → leadMeta/deletedIds 등 모든 Firestore 구독이 연쇄 붕괴
+  // 온라인 문의 알림은 App.js 30초 폴링으로 이미 처리 중
+
 
   useEffect(() => {
     // 1) localStorage → Firestore 마이그레이션 (최초 1회)
@@ -254,6 +223,8 @@ const LeadPipeline = () => {
         setDeletedIds(ids);
       },
       onLeadMeta: (meta) => {
+        // ✅ ref를 항상 최신 상태로 유지 (setInterval stale closure 방지)
+        leadMetaRef.current = meta;
         setLeadMeta(meta);
       },
       onManualLeads: (manual) => {
@@ -271,16 +242,22 @@ const LeadPipeline = () => {
       },
     });
 
-    // 3) Google Sheets 초기 로드
-    loadLeadsFromSheet();
+    // 3) Google Sheets 초기 로드는 별도 useEffect에서 처리
+    // (loadLeadsFromSheet가 이 useEffect보다 나중에 선언되어 ref가 null일 수 있음)
 
-    // 4) 5분마다 자동 새로고침 → 신규 온라인 문의 감지
+    // 4) 5분마다 자동 새로고침
+    // ✅ setInterval 콜백에서 ref를 통해 호출 → stale closure 완전 차단
     const refreshInterval = setInterval(() => {
-      loadLeadsFromSheet();
+      if (loadLeadsFromSheetRef.current) loadLeadsFromSheetRef.current();
     }, 5 * 60 * 1000);
 
     return () => { unsubscribe(); clearInterval(refreshInterval); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ✅ 초기 Sheet 로드: loadLeadsFromSheet 함수 정의 후 실행되도록 별도 useEffect
+  // (위 useEffect에서 호출하면 ref가 아직 null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+
 
   // CSV 파싱 (gviz 응답용 - 따옴표 포함 필드 처리)
   const parseCSV = (text) => {
@@ -300,6 +277,8 @@ const LeadPipeline = () => {
   };
 
   const loadLeadsFromSheet = async () => {
+    // ✅ 함수가 재정의될 때마다 ref를 최신으로 갱신
+    loadLeadsFromSheetRef.current = loadLeadsFromSheet;
     try {
       // ✅ 직원 Sheet (광고 관리 통합) - 상담이력 탭
       const sheetId = "1Iue5sV2PE3c6rqLuVozrp14JiKciGyKvbP8bJheqWlA";
@@ -408,11 +387,10 @@ const LeadPipeline = () => {
         });
 
       // ── Firestore 메타 오버라이드 적용 ──────────────────────────
-      // ⚠️ leadMeta state는 Sheet 파싱 시점에 아직 비어있을 수 있으므로
-      //    Firestore에서 직접 읽어 타이밍 문제 해결
-      const freshMeta = await getLeadMeta();
-      // state도 업데이트 (onSnapshot보다 먼저 도착했을 때를 위해)
-      const storedMeta = Object.keys(freshMeta).length > 0 ? freshMeta : (leadMeta || {});
+      // ✅ leadMetaRef.current 사용: onSnapshot이 항상 최신값을 유지하므로
+      //    getLeadMeta() 직접 읽기(네트워크 실패 시 {} 반환 위험) 완전 제거
+      //    setInterval stale closure와 무관하게 항상 최신 데이터 보장
+      const storedMeta = leadMetaRef.current || {};
 
       // 구 형식 키들에서 고객명을 역방향 추출 → 고객명 → 메타 매핑
       // (stageOverride, consultationLogs, actions 등 포함된 것만)
@@ -511,7 +489,13 @@ const LeadPipeline = () => {
     }
   };
 
-  // 필터링된 리드
+  // ✅ 초기 Sheet 로드 useEffect: loadLeadsFromSheet 정의 직후 위치
+  // → 함수가 완전히 정의된 다음 실행되므로 ref가 반드시 초기화된 상태
+  useEffect(() => {
+    loadLeadsFromSheet();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+
   const filteredLeads = leads.filter(lead => {
     const matchesStage = filter === "ALL" || lead.stage === filter;
     const matchesSearch = !searchTerm ||
@@ -1233,9 +1217,10 @@ const LeadPipeline = () => {
           onSaveMeta={meta => saveLeadMeta(selectedLead.id, meta)}
           onClose={() => setSelectedLead(null)}
           onUpdate={(updatedLead) => {
-            // Firestore에 단계·상담일지·수정 정보 영속 저장
-            const prevMeta = leadMeta[updatedLead.id] || {};
-            // 기존 consultationLogs와 새 logs 누적 (중복리 없이 merge)
+            // ✅ leadMetaRef.current 사용: 모달이 열려있는 동안 onSnapshot으로 갱신된
+            //    최신 메타를 참조. leadMeta 클로저(stale) 사용 시 기존 데이터가 덮어씌워지는 버그 방지
+            const prevMeta = leadMetaRef.current[updatedLead.id] || {};
+            // 기존 consultationLogs와 새 logs 누적 (중복 없이 merge)
             const existingLogs = prevMeta.consultationLogs || [];
             const newLogs = updatedLead.consultationLogs || [];
             const mergedLogs = [
@@ -1259,7 +1244,8 @@ const LeadPipeline = () => {
                 remark: updatedLead.remark,
               },
             });
-            setLeads(leads.map(l => l.id === updatedLead.id ? updatedLead : l));
+            setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+
             setSelectedLead(null);
           }}
         />
