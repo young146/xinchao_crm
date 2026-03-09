@@ -2,23 +2,36 @@ import React, { useState, useEffect } from "react";
 import DataTransformer from "./components/DataTransformer";
 import DataFiller from "./components/DataFiller";
 import CustomerCard from "./components/CustomerCard";
+import CustomerDB from "./components/CustomerDB";
 import AddCustomerForm from "./components/AddCustomerForm";
 import VolumeSchedule from "./components/VolumeSchedule";
 import VolumeScheduleEditor from "./components/VolumeScheduleEditor";
 import LeadPipeline from "./components/LeadPipeline";
-import { getContractStatus, getPaymentStatus, CURRENT_VOLUME } from "./utils/contractStatus";
+import { getContractStatus, getPaymentStatus } from "./utils/contractStatus";
+import { getCurrentVolume, DEFAULT_VOLUME_SCHEDULE } from "./utils/volumeSchedule";
 import { parseVolumeRange, parsePrice } from "./utils/dataTransformer";
+import { listenVolumeSchedule } from "./services/crmFirestore";
 
 const Dashboard = () => {
   const [inquiries, setInquiries] = useState([]);
   const [activeAds, setActiveAds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("dashboard"); // 'dashboard', 'filler', 'transformer', 'schedule', 'schedule-edit', 'pipeline'
+  const [activeTab, setActiveTab] = useState("dashboard"); // 'dashboard', 'filler', 'transformer', 'schedule', 'schedule-edit', 'pipeline', 'customerdb'
+  const [selectedDBCustomer, setSelectedDBCustomer] = useState(null); // 고객명단 탭에서 선택된 고객
   const [searchTerm, setSearchTerm] = useState(""); // 검색어
   const [selectedCustomer, setSelectedCustomer] = useState(null); // 선택된 고객
   const [showAddForm, setShowAddForm] = useState(false); // 새 고객 추가 폼 표시 여부
-  const [newInquiryCount, setNewInquiryCount] = useState(0); // 오늘 신규 문의 건수
-  const [showAlarmDismissed, setShowAlarmDismissed] = useState(false); // 알람 닫기
+  const [newInquiryCount, setNewInquiryCount] = useState(0);
+  const [showAlarmDismissed, setShowAlarmDismissed] = useState(false);
+  const seenInquiryIdsRef = React.useRef(new Set()); // 이미 감지한 문의 ID
+  const [newOnlineInquiries, setNewOnlineInquiries] = useState([]); // LeadPipeline에 전달할 신규 문의
+
+  // 전역 고객 검색
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearchTerm, setGlobalSearchTerm] = useState("");
+  const [sharedCustomers, setSharedCustomers] = useState([]); // CustomerDB에서 로드한 시트 고객 목록
+  const [pipelineLeads, setPipelineLeads] = useState([]);   // LeadPipeline에서 전달받은 문의 목록
+  const [currentVolume, setCurrentVolume] = useState(() => getCurrentVolume()); // 현재 호수 (Firestore 실시간)
 
   // 구글 시트를 TSV 형태로 읽어오는 함수 (쉼표 문제 해결)
   const fetchSheetData = async (sheetId) => {
@@ -31,38 +44,40 @@ const Dashboard = () => {
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        // 1. 광고접수인덱스 시트 읽기
         const inquiryData = await fetchSheetData(
           "1gbtZ7jTsYvN7IQ8gnpMNg2TVJHu-lo9o3UWIvJ7fsPo",
         );
-        const rows = inquiryData.slice(1); // 헤더 제외
+        const rows = inquiryData.slice(1);
         setInquiries(rows);
 
-        // 오늘 신규 문의 건수 계산 (A컬럼=접수번호, B컬럼=접수일)
-        const todayStr = new Date().toISOString().split("T")[0]; // "2026-02-20"
-        const todayCount = rows.filter(
-          (row) => row[1] && row[1].trim() === todayStr
-        ).length;
-        setNewInquiryCount(todayCount);
+        const todayStr = new Date().toISOString().split("T")[0];
+        const todayRows = rows.filter(row => row[1] && row[1].trim() === todayStr);
+        setNewInquiryCount(todayRows.length);
 
-        // 2. 정산 상세 시트 읽기 (ADVERTISEMENT DETAILS)
+        // 🔔 신규 온라인 문의 감지 (30초 폴링)
+        const isFirstPoll = seenInquiryIdsRef.current.size === 0;
+        const freshEntries = [];
+        todayRows.forEach((row, idx) => {
+          const uid = (row[1] || '') + '|' + (row[2] || '') + '|' + idx; // 날짜+업체+인덱스
+          if (!seenInquiryIdsRef.current.has(uid)) {
+            seenInquiryIdsRef.current.add(uid);
+            if (!isFirstPoll) freshEntries.push({ customer: row[2] || '', phone: row[4] || '', date: row[1] || '', contactMethod: row[3] || '' });
+          }
+        });
+        if (freshEntries.length > 0) {
+          setNewOnlineInquiries(prev => [...freshEntries, ...prev]);
+          // 🔔 LeadPipeline에 즉시 알림 전달 (props 없이 이벤트로 통신)
+          window.dispatchEvent(new CustomEvent('newOnlineInquiry', { detail: freshEntries }));
+        }
+
+        // 정산 상세 시트
         const adData = await fetchSheetData(
           "11W8Zf6OhO45L3F8Ulz63p3wCdF8PwJpsNlC18gSsLs0",
         );
-
-        console.log("원본 데이터 샘플 (처음 10행):", adData.slice(0, 10));
-
-        // 헤더/타이틀 행 제외하고 실제 데이터만 필터링
-        // 6번째 행부터 시작, 업체명(B컬럼, index 1)이 있는 행만 추출
         const filteredData = adData
-          .slice(6) // 처음 6행은 헤더
-          .filter(row => row[1] && row[1].trim() !== "" && row[1] !== "CUSTOMER"); // 업체명이 있는 행만
-
-        console.log("필터링된 데이터 개수:", filteredData.length);
-        console.log("필터링된 데이터 샘플 (처음 3개):", filteredData.slice(0, 3));
-
+          .slice(6)
+          .filter(row => row[1] && row[1].trim() !== "" && row[1] !== "CUSTOMER");
         setActiveAds(filteredData);
-
         setLoading(false);
       } catch (e) {
         console.error("데이터 로딩 실패", e);
@@ -71,6 +86,8 @@ const Dashboard = () => {
     };
 
     loadAllData();
+    // 30초마다 폴링 → 신규 온라인 문의 감지
+    const pollInterval = setInterval(loadAllData, 30 * 1000);
 
     // 발행 일정 업데이트 이벤트 - 페이지 새로고침 없이 리렌더만 유도
     // (VolumeScheduleEditor/VolumeSchedule 컴포넌트가 자체적으로 이벤트를 받아 상태 업데이트)
@@ -80,9 +97,49 @@ const Dashboard = () => {
 
     window.addEventListener("volumeScheduleUpdated", handleScheduleUpdate);
 
-    return () => {
-      window.removeEventListener("volumeScheduleUpdated", handleScheduleUpdate);
+    // Ctrl+K 전역 단축키
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setGlobalSearchOpen(true);
+        setGlobalSearchTerm("");
+      }
+      if (e.key === 'Escape') setGlobalSearchOpen(false);
     };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener("volumeScheduleUpdated", handleScheduleUpdate);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  // Firestore 발행일정 실시간 구독 → currentVolume 자동 업데이트
+  useEffect(() => {
+    const unsub = listenVolumeSchedule((firestoreOverrides) => {
+      // Firestore 오버라이드 + localStorage + DEFAULT 병합
+      let localOverrides = {};
+      try {
+        const saved = localStorage.getItem("volumeSchedule");
+        localOverrides = saved ? JSON.parse(saved) : {};
+      } catch { /* ignore */ }
+      const allOverrides = { ...localOverrides, ...firestoreOverrides };
+      localStorage.setItem("volumeSchedule", JSON.stringify(allOverrides));
+      // 날짜 기준으로 현재 호수 재계산
+      const mergedSchedule = { ...DEFAULT_VOLUME_SCHEDULE, ...allOverrides };
+      const today = new Date();
+      let maxVol = null, maxDate = null;
+      Object.entries(mergedSchedule).forEach(([vol, info]) => {
+        const d = new Date(info.date);
+        if (d <= today && (!maxDate || d > maxDate)) {
+          maxDate = d;
+          maxVol = parseInt(vol);
+        }
+      });
+      if (maxVol) setCurrentVolume(maxVol);
+    });
+    return () => unsub();
   }, []);
 
   if (loading)
@@ -104,8 +161,20 @@ const Dashboard = () => {
       <header
         style={{ borderBottom: "3px solid #d32f2f", marginBottom: "20px" }}
       >
-        <h1 style={{ color: "#d32f2f" }}>
+        <h1 style={{ color: "#d32f2f", display: "flex", alignItems: "center", gap: "16px", margin: 0, marginBottom: "4px" }}>
           Xinchao Vietnam 영업 통합 관제탑 (2026)
+          <button
+            onClick={() => { setGlobalSearchOpen(true); setGlobalSearchTerm(""); }}
+            title="고객 빠른 검색 (Ctrl+K)"
+            style={{
+              padding: "6px 16px", background: "#fff", color: "#555",
+              border: "1px solid #ddd", borderRadius: "20px",
+              cursor: "pointer", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+            }}
+          >
+            🔍 고객 검색 <kbd style={{ fontSize: "10px", background: "#f5f5f5", padding: "1px 5px", borderRadius: "3px", border: "1px solid #ddd" }}>Ctrl+K</kbd>
+          </button>
         </h1>
 
         {/* 🔔 신규 광고 문의 알람 배너 */}
@@ -220,6 +289,21 @@ const Dashboard = () => {
             📅 발행 일정
           </button>
           <button
+            onClick={() => setActiveTab("customerdb")}
+            style={{
+              padding: "10px 20px",
+              fontSize: "14px",
+              backgroundColor: activeTab === "customerdb" ? "#d32f2f" : "#fff",
+              color: activeTab === "customerdb" ? "#fff" : "#333",
+              border: "2px solid #d32f2f",
+              borderRadius: "5px 5px 0 0",
+              cursor: "pointer",
+              fontWeight: activeTab === "customerdb" ? "bold" : "normal",
+            }}
+          >
+            👥 고객명단
+          </button>
+          <button
             onClick={() => setActiveTab("filler")}
             style={{
               padding: "10px 20px",
@@ -254,6 +338,24 @@ const Dashboard = () => {
 
       {/* 탭 컨텐츠 */}
       {activeTab === "pipeline" && <LeadPipeline />}
+
+      {/* 고객명단 탭 */}
+      {activeTab === "customerdb" && (
+        <CustomerDB
+          onSelectCustomer={(row) => setSelectedDBCustomer(row)}
+          onCustomersLoaded={(rows) => setSharedCustomers(rows)}
+        />
+      )}
+
+      {/* 고객 상세 카드 - 어느 탭에서나 열릴 수 있음 */}
+      {selectedDBCustomer && (
+        <CustomerCard
+          customer={selectedDBCustomer}
+          mode="sheet"
+          onClose={() => setSelectedDBCustomer(null)}
+          onSave={() => { setSelectedDBCustomer(null); }}
+        />
+      )}
 
       {activeTab === "schedule" && (
         <div>
@@ -304,13 +406,64 @@ const Dashboard = () => {
       {activeTab === "filler" && <DataFiller />}
 
       {activeTab === "dashboard" && (<>
+        {/* 🆕 신규 계약 고객 패널 - 기준 vol부터 새로 광고 계약을 한 고객 목록 */}
+        {(() => {
+          const newContracts = activeAds
+            .map(row => {
+              const { startVol, endVol } = parseVolumeRange(row[9]);
+              return { name: row[1], startVol, endVol, size: row[5], phone: row[3], row };
+            })
+            .filter(c => c.startVol >= currentVolume)
+            .sort((a, b) => a.startVol - b.startVol);
+          return (
+            <div style={{ marginBottom: "20px", background: "#fff", padding: "20px", borderRadius: "10px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", borderLeft: "5px solid #4caf50" }}>
+              <h3 style={{ color: "#2e7d32", margin: "0 0 4px 0" }}>🆕 신규 광고 계약 고객 (Vol {currentVolume} 기준)</h3>
+              <p style={{ color: "#888", fontSize: "13px", margin: "0 0 14px 0" }}>Vol {currentVolume} 이후에 새로 광고 계약을 시작한 고객 명단입니다.</p>
+              {newContracts.length === 0 ? (
+                <div style={{ color: "#aaa", fontSize: "13px", padding: "12px", background: "#f9f9f9", borderRadius: "6px", textAlign: "center" }}>
+                  Vol {currentVolume} 기준 신규 계약 고객이 없습니다.
+                </div>
+              ) : (
+                newContracts.map((c, i) => (
+                  <div
+                    key={i}
+                    onClick={() => {
+                      const name = (c.name || "").trim().toLowerCase();
+                      const dbRow = sharedCustomers.find(r => (r[0] || "").trim().toLowerCase() === name);
+                      if (dbRow) setSelectedDBCustomer(dbRow);
+                      else setSelectedDBCustomer([c.name || "", "", "", "", "", "", "", "", "", "", "", "", "", c.size || "", "", "", "", ""]);
+                    }}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#e8f5e9", borderRadius: "6px", marginBottom: "5px", border: "1px solid #a5d6a7", cursor: "pointer", transition: "background 0.2s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#c8e6c9"}
+                    onMouseLeave={e => e.currentTarget.style.background = "#e8f5e9"}
+                    title="클릭 시 고객 카드 열기"
+                  >
+                    <div>
+                      <strong style={{ color: "#2e7d32" }}>{c.name}</strong>
+                      {c.size && <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>📐 {c.size}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {c.endVol && (
+                        <span style={{ fontSize: "12px", color: "#555" }}>Vol {c.startVol}~{c.endVol}</span>
+                      )}
+                      <span style={{ fontSize: "11px", fontWeight: "bold", background: c.startVol === currentVolume ? "#4caf50" : "#81c784", color: "#fff", padding: "2px 10px", borderRadius: "10px" }}>
+                        {c.startVol === currentVolume ? "🆕 이번호 시작" : `Vol ${c.startVol} 시작`}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })()}
+
         {/* 재계약 알림 패널 - 발행호 기준 4호 이내 만료 또는 만료+미수금 고객 */}
         <div style={{ marginBottom: "30px" }}>
           {(() => {
             const renewals = activeAds
               .map(row => {
                 const { startVol, endVol } = parseVolumeRange(row[9]);
-                const remaining = endVol ? endVol - CURRENT_VOLUME : null;
+                const remaining = endVol ? endVol - currentVolume : null;
                 return { name: row[1], startVol, endVol, remaining, row };
               })
               .filter(c => c.endVol && c.remaining !== null && c.remaining >= 0 && c.remaining <= 3)
@@ -325,13 +478,13 @@ const Dashboard = () => {
                 const unpaid = totalAmount - received;
                 return { name: row[1], endVol, unpaid };
               })
-              .filter(c => c.endVol && CURRENT_VOLUME > c.endVol && c.unpaid > 0);
+              .filter(c => c.endVol && currentVolume > c.endVol && c.unpaid > 0);
 
             if (renewals.length === 0 && expiredUnpaid.length === 0) return null;
 
             return (
               <div style={{ background: "#fff", padding: "20px", borderRadius: "10px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", borderLeft: "5px solid #e67e22" }}>
-                <h3 style={{ color: "#e67e22", margin: "0 0 4px 0" }}>📢 재계약 대상 고객 (Vol {CURRENT_VOLUME} 기준)</h3>
+                <h3 style={{ color: "#e67e22", margin: "0 0 4px 0" }}>📢 재계약 대상 고객 (Vol {currentVolume} 기준)</h3>
                 <p style={{ color: "#888", fontSize: "13px", margin: "0 0 14px 0" }}>4호 이내 계약 만료 또는 만료+미수금 고객에게 재계약을 제안하세요.</p>
                 {renewals.length > 0 && (
                   <div style={{ marginBottom: expiredUnpaid.length > 0 ? "14px" : 0 }}>
@@ -520,7 +673,21 @@ const Dashboard = () => {
                           transition: "background-color 0.2s",
                           cursor: "pointer"
                         }}
-                        onClick={() => setSelectedCustomer(row)}
+                        onClick={() => {
+                          // 고객DB(sharedCustomers)에서 같은 고객명 찾기 → SheetCustomerCard 열기
+                          const name = (row[1] || "").trim().toLowerCase();
+                          const dbRow = sharedCustomers.find(r => (r[0] || "").trim().toLowerCase() === name);
+                          if (dbRow) {
+                            setSelectedDBCustomer(dbRow);
+                          } else {
+                            setSelectedDBCustomer([
+                              row[1] || "", row[4] || "", "", row[3] || "", "",
+                              row[2] || "", "", "", "", "", "", "", "",
+                              row[5] || "", "", "", "", ""
+                            ]);
+                          }
+                        }}
+                        title="클릭 시 고객 상세 카드 열기"
                         onMouseEnter={(e) => {
                           e.currentTarget.style.backgroundColor = "#e3f2fd";
                           e.currentTarget.style.transform = "scale(1.01)";
@@ -734,27 +901,179 @@ const Dashboard = () => {
       {activeTab === "transformer" && <DataTransformer />}
 
       {/* 고객 상세 카드 모달 */}
-      {
-        selectedCustomer && (
-          <CustomerCard
-            customer={selectedCustomer}
-            onClose={() => setSelectedCustomer(null)}
-          />
-        )
-      }
+      {selectedCustomer && (
+        <CustomerCard
+          customer={selectedCustomer}
+          onClose={() => setSelectedCustomer(null)}
+        />
+      )}
 
       {/* 새 고객 추가 폼 모달 */}
-      {
-        showAddForm && (
-          <AddCustomerForm
-            onClose={() => setShowAddForm(false)}
-            onAdd={(newCustomer) => {
-              console.log("새 고객 추가됨:", newCustomer);
-              // 필요시 로컬 상태 업데이트 (실제로는 Google Sheets 리프레시 필요)
+      {showAddForm && (
+        <AddCustomerForm
+          onClose={() => setShowAddForm(false)}
+          onAdd={(newCustomer) => { console.log("새 고객 추가됨:", newCustomer); }}
+        />
+      )}
+
+      {/* 🔍 전역 고객 검색 모달 */}
+      {globalSearchOpen && (
+        <div
+          onClick={() => setGlobalSearchOpen(false)}
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.5)", zIndex: 99999,
+            display: "flex", justifyContent: "center", alignItems: "flex-start",
+            paddingTop: "80px",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: "14px", width: "680px",
+              maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+              overflow: "hidden", display: "flex", flexDirection: "column",
             }}
-          />
-        )
-      }
+          >
+            {/* 검색 입력 */}
+            <div style={{ display: "flex", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #eee", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>🔍</span>
+              <input
+                autoFocus
+                type="text"
+                placeholder="고객사명, 담당자명, 연락처로 검색..."
+                value={globalSearchTerm}
+                onChange={e => setGlobalSearchTerm(e.target.value)}
+                style={{ flex: 1, fontSize: "16px", border: "none", outline: "none", background: "transparent" }}
+              />
+              {globalSearchTerm && (
+                <button onClick={() => setGlobalSearchTerm("")}
+                  style={{ background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: "18px" }}>✕</button>
+              )}
+              <kbd style={{ fontSize: "11px", color: "#999", background: "#f5f5f5", padding: "2px 7px", borderRadius: "4px", border: "1px solid #ddd" }}>ESC</kbd>
+            </div>
+
+            {/* 검색 결과 */}
+            <div style={{ maxHeight: "480px", overflowY: "auto" }}>
+              {!globalSearchTerm.trim() ? (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "#bbb" }}>
+                  <div style={{ fontSize: "32px", marginBottom: "8px" }}>👥</div>
+                  <div>고객사명 또는 담당자 이름을 입력하세요</div>
+                  <div style={{ fontSize: "12px", marginTop: "8px", color: "#d32f2f" }}>
+                    총 {sharedCustomers.length + inquiries.filter(r => r[2]).length}명의 고객 데이터에서 검색
+                  </div>
+                </div>
+              ) : (() => {
+                const term = globalSearchTerm.toLowerCase();
+
+                // 1) 고객DB 시트에서 검색
+                const sheetResults = sharedCustomers
+                  .filter(row =>
+                    (row[0] || "").toLowerCase().includes(term) ||
+                    (row[1] || "").toLowerCase().includes(term) ||
+                    (row[3] || "").toLowerCase().includes(term) ||
+                    (row[4] || "").toLowerCase().includes(term)
+                  )
+                  .slice(0, 12);
+
+                // 2) 파이프라인 문의(inquiries 시트)에서 검색 – 고객DB에 없는 것만
+                const sheetNames = new Set(sharedCustomers.map(r => (r[0] || "").toLowerCase()));
+                const pipeResults = inquiries
+                  .filter(row => {
+                    const name = (row[2] || "").toLowerCase();
+                    if (!name || sheetNames.has(name)) return false;
+                    return (
+                      name.includes(term) ||
+                      (row[3] || "").toLowerCase().includes(term) ||
+                      (row[5] || "").toLowerCase().includes(term)
+                    );
+                  })
+                  .slice(0, 6);
+
+                const totalCount = sheetResults.length + pipeResults.length;
+
+                if (totalCount === 0) return (
+                  <div style={{ padding: "40px 20px", textAlign: "center", color: "#bbb" }}>
+                    <div style={{ fontSize: "28px", marginBottom: "8px" }}>😶</div>
+                    <div>"{globalSearchTerm}" 에 해당하는 고객이 없습니다</div>
+                  </div>
+                );
+
+                return (
+                  <div>
+                    {sheetResults.length > 0 && (
+                      <div>
+                        <div style={{ padding: "8px 20px", fontSize: "11px", fontWeight: "bold", color: "#888", background: "#f9f9f9", borderBottom: "1px solid #f0f0f0" }}>
+                          📋 고객DB ({sheetResults.length}건)
+                        </div>
+                        {sheetResults.map((row, i) => {
+                          const status = row[9] || row[10] || "";
+                          const statusColor = { "계약": "#2e7d32", "상담중": "#1565c0", "완납": "#1b5e20", "미수금": "#c62828", "문의": "#e65100" }[status] || "#888";
+                          return (
+                            <div
+                              key={"sheet" + i}
+                              onClick={() => {
+                                setActiveTab("customerdb");
+                                setSelectedDBCustomer(row);
+                                setGlobalSearchOpen(false);
+                              }}
+                              style={{ padding: "12px 20px", cursor: "pointer", borderBottom: "1px solid #f5f5f5", display: "flex", alignItems: "center", gap: "12px" }}
+                              onMouseEnter={e => e.currentTarget.style.background = "#e3f2fd"}
+                              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                            >
+                              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#d32f2f", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: "bold", flexShrink: 0 }}>
+                                {(row[0] || "?")[0]}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: "bold", fontSize: "14px", color: "#1a237e" }}>{row[0]}</div>
+                                <div style={{ fontSize: "12px", color: "#888" }}>{row[1]}{row[3] ? " · " + row[3] : ""}{row[4] ? " · " + row[4] : ""}</div>
+                              </div>
+                              {status && <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", background: statusColor + "18", color: statusColor, fontWeight: "bold", flexShrink: 0 }}>{status}</span>}
+                              <span style={{ fontSize: "11px", color: "#bbb", flexShrink: 0 }}>고객DB →</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {pipeResults.length > 0 && (
+                      <div>
+                        <div style={{ padding: "8px 20px", fontSize: "11px", fontWeight: "bold", color: "#888", background: "#f9f9f9", borderBottom: "1px solid #f0f0f0" }}>
+                          💼 파이프라인 문의 ({pipeResults.length}건)
+                        </div>
+                        {pipeResults.map((row, i) => (
+                          <div
+                            key={"pipe" + i}
+                            onClick={() => {
+                              setActiveTab("pipeline");
+                              setGlobalSearchOpen(false);
+                            }}
+                            style={{ padding: "12px 20px", cursor: "pointer", borderBottom: "1px solid #f5f5f5", display: "flex", alignItems: "center", gap: "12px" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "#fff3e0"}
+                            onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                          >
+                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#ff9800", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: "bold", flexShrink: 0 }}>
+                              {(row[2] || "?")[0]}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: "bold", fontSize: "14px", color: "#333" }}>{row[2]}</div>
+                              <div style={{ fontSize: "12px", color: "#888" }}>{row[3]}{row[5] ? " · " + row[5] : ""} · {row[1]}</div>
+                            </div>
+                            <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", background: "#fff3e0", color: "#e65100", fontWeight: "bold", flexShrink: 0 }}>문의</span>
+                            <span style={{ fontSize: "11px", color: "#bbb", flexShrink: 0 }}>파이프라인 →</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+            <div style={{ padding: "10px 20px", borderTop: "1px solid #eee", fontSize: "11px", color: "#bbb", textAlign: "right" }}>
+              결과를 클릭하면 해당 탭으로 이동합니다
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };

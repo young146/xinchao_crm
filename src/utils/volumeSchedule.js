@@ -87,7 +87,7 @@ export const getCurrentVolume = () => {
 
   Object.entries(schedule).forEach(([vol, info]) => {
     const volDate = new Date(info.date);
-    if (volDate <= today && info.status === "published") {
+    if (volDate <= today) {  // 날짜가 지났으면 자동으로 현재 호수로 인식 (status 무관)
       if (!closestDate || volDate > closestDate) {
         closestDate = volDate;
         currentVol = parseInt(vol);
