@@ -87,6 +87,7 @@ const LeadPipeline = () => {
   const [showConsultationForm, setShowConsultationForm] = useState(null);
   const [filter, setFilter] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateFilter, setDateFilter] = useState("ALL"); // ALL | TODAY | WEEK | MONTH
   // localStorage 기반 – 삭제 목록 & 리드별 메타데이터(다음일정, ToDo)
   const [deletedIds, setDeletedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('crm_deletedIds') || '[]'); } catch { return []; }
@@ -135,6 +136,7 @@ const LeadPipeline = () => {
 
   const loadLeadsFromSheet = async () => {
     try {
+      // ✅ CRM에 연동된 광고접수인덱스-2026 시트 ID
       const sheetId = "1gbtZ7jTsYvN7IQ8gnpMNg2TVJHu-lo9o3UWIvJ7fsPo";
 
       // 2025탭과 2026탭을 시트 이름으로 직접 지정해서 각각 가져옴
@@ -163,6 +165,7 @@ const LeadPipeline = () => {
         }
       };
 
+      // 2025탭과 2026탭 로드 (같은 시트, 연도별 탭)
       const [rows2025, rows2026] = await Promise.all([
         fetchTab("2025"),
         fetchTab("2026"),
@@ -191,20 +194,34 @@ const LeadPipeline = () => {
         return { ...row, _filledDate: correctedDate, _year: tabYear };
       });
 
+      // 파싱: 2025/2026 탭 전체 행 처리
+      // GAS로 접수된 폼 문의는 row[14](O열)에 "온라인 폼"/"오프라인 폼" 저장됨
+      // → 해당 값으로 isFromForm 판별 후 컬럼 매핑 분기
+      const FORM_SOURCES = ["온라인 폼", "오프라인 폼", "앱 문의"];
+
       const parsedLeads = filledRows
         .filter(row => row[2] && row[2].trim() !== "")  // 고객명 있는 행만
         .map((row, index) => {
+          // O열(index 14)에 알려진 폼 접수 레이블이 있으면 폼 접수로 판단
+          const isFromForm = FORM_SOURCES.some(src => (row[14] || "").includes(src));
+
+          // 컬럼 매핑 분기:
+          // - 수동 입력 행: M(12)=Remark, N(13)=FollowUp (기존 구조)
+          // - GAS 폼 행: M(12)=빈칸, N(13)=Remark, O(14)=접수경로
+          const remarkVal = isFromForm ? (row[13] || "") : (row[12] || "");
+          const followUpVal = isFromForm ? (row[14] || "") : (row[13] || "");
+
           let stage = "INQUIRY";
-          const remark = (row[12] || "").toLowerCase();
-          if (remark.includes("계약") || remark.includes("진행")) stage = "CONTRACT";
-          else if (remark.includes("견적") || remark.includes("제안") || remark.includes("상담")) stage = "CONSULTATION";
-          else if (remark.includes("취소") || remark.includes("불발")) stage = "LOST";
-          else if (remark.includes("대기") || remark.includes("보류")) stage = "ON_HOLD";
+          const remarkLow = remarkVal.toLowerCase();
+          if (remarkLow.includes("계약") || remarkLow.includes("진행")) stage = "CONTRACT";
+          else if (remarkLow.includes("견적") || remarkLow.includes("제안") || remarkLow.includes("상담")) stage = "CONSULTATION";
+          else if (remarkLow.includes("취소") || remarkLow.includes("불발")) stage = "LOST";
+          else if (remarkLow.includes("대기") || remarkLow.includes("보류")) stage = "ON_HOLD";
 
           return {
             id: `lead-${index}`,
             year: row._year,
-            date: row._filledDate || "",   // 채워진 날짜 사용
+            date: row._filledDate || "",
             customer: row[2] || "",
             contact: row[3] || "",
             position: row[4] || "",
@@ -215,10 +232,11 @@ const LeadPipeline = () => {
             startDate: row[9] || "",
             volume: row[10] || "",
             term: row[11] || "",
-            remark: row[12] || "",
-            followUp: row[13] || "",
+            remark: remarkVal,
+            followUp: followUpVal,
             stage,
-            priority: remark.includes("긴급") ? "HIGH" : "MEDIUM",
+            isFromForm,           // 🆕 폼 접수 여부
+            priority: remarkLow.includes("긴급") ? "HIGH" : "MEDIUM",
             documents: [],
             consultationLogs: [],
             history: [],
@@ -235,14 +253,28 @@ const LeadPipeline = () => {
     }
   };
 
-  // 필터링된 리드
+  // 날짜 필터 경계 계산
+  const todayStr = new Date().toISOString().split('T')[0];
+  const weekAgoStr = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().split('T')[0]; })();
+  const monthAgoStr = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().split('T')[0]; })();
+
+  // 필터링된 리드 (단계 + 검색 + 날짜)
   const filteredLeads = leads.filter(lead => {
     const matchesStage = filter === "ALL" || lead.stage === filter;
     const matchesSearch = !searchTerm ||
       lead.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lead.contact.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lead.phone.includes(searchTerm);
-    return matchesStage && matchesSearch;
+    // 날짜 필터 (날짜가 없는 항목은 ALL 외에 제외)
+    let matchesDate = true;
+    if (dateFilter !== "ALL") {
+      const d = lead.date ? lead.date.slice(0, 10) : "";
+      if (!d) { matchesDate = false; }
+      else if (dateFilter === "TODAY") matchesDate = d === todayStr;
+      else if (dateFilter === "WEEK") matchesDate = d >= weekAgoStr && d <= todayStr;
+      else if (dateFilter === "MONTH") matchesDate = d >= monthAgoStr && d <= todayStr;
+    }
+    return matchesStage && matchesSearch && matchesDate;
   });
 
   // 단계 이동 함수
@@ -362,10 +394,17 @@ const LeadPipeline = () => {
     <div style={{ padding: "20px", fontFamily: "sans-serif", backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
 
       {/* 헤더 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", background: "#fff", padding: "16px 20px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.08)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", background: "#fff", padding: "16px 20px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.08)" }}>
         <div>
           <h2 style={{ color: "#d32f2f", margin: 0, fontSize: "20px" }}>💼 영업 파이프라인</h2>
-          <span style={{ fontSize: "13px", color: "#888" }}>2026년 문의 {leads.length}건 · 표시 {sortedLeads.length}건</span>
+          <span style={{ fontSize: "13px", color: "#888" }}>
+            전체 {leads.length}건 · 표시 {sortedLeads.length}건
+            {leads.filter(l => l.isFromForm).length > 0 && (
+              <span style={{ marginLeft: "8px", background: "#e3f2fd", color: "#1565c0", padding: "2px 8px", borderRadius: "10px", fontSize: "12px", fontWeight: "bold" }}>
+                🆕 신규 문의 {leads.filter(l => l.isFromForm).length}건
+              </span>
+            )}
+          </span>
         </div>
         <button
           onClick={() => setShowAddForm(true)}
@@ -373,6 +412,34 @@ const LeadPipeline = () => {
         >
           ➕ 신규 광고 문의 접수
         </button>
+      </div>
+
+      {/* 날짜 필터 */}
+      <div style={{ display: "flex", gap: "6px", marginBottom: "12px", flexWrap: "wrap", background: "#fff", padding: "10px 16px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
+        <span style={{ fontSize: "12px", color: "#888", alignSelf: "center", marginRight: "4px" }}>📅 기간:</span>
+        {[
+          { id: "ALL", label: "전체" },
+          { id: "TODAY", label: "오늘" },
+          { id: "WEEK", label: "이번 주" },
+          { id: "MONTH", label: "이번 달" },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setDateFilter(id)}
+            style={{
+              padding: "5px 14px",
+              backgroundColor: dateFilter === id ? "#1565c0" : "#f5f5f5",
+              color: dateFilter === id ? "#fff" : "#555",
+              border: "none",
+              borderRadius: "16px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: dateFilter === id ? "bold" : "normal",
+            }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* 단계별 카운터 탭 */}
@@ -571,8 +638,15 @@ const LeadPipeline = () => {
                   {[lead.adType, lead.size].filter(Boolean).join(" / ") || "-"}
                 </div>
 
-                {/* 접수 경로 */}
-                <div style={{ fontSize: "12px", color: "#777" }}>{lead.followUp || "-"}</div>
+                {/* 접수 경로 + 🆕 배지 */}
+                <div style={{ fontSize: "12px", color: "#777" }}>
+                  {lead.isFromForm && (
+                    <span style={{ display: "inline-block", background: "#e3f2fd", color: "#1565c0", fontSize: "10px", fontWeight: "bold", padding: "1px 6px", borderRadius: "8px", marginRight: "4px" }}>
+                      🆕
+                    </span>
+                  )}
+                  {lead.followUp || "-"}
+                </div>
 
                 {/* 단계 배지 */}
                 <div style={{ textAlign: "center" }}>
