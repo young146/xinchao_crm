@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   saveDeletedIds,
   saveLeadMeta as fsaveLeadMeta,
@@ -112,7 +112,6 @@ const LeadPipeline = () => {
   // 리드 → 휴지통으로 이동 (삭제)
   const deleteLead = async (lead, e) => {
     e.stopPropagation();
-    if (!window.confirm(`"${lead.customer}"를 휴지통으로 이동할까요?\n(휴지통에서 복원할 수 있습니다)`)) return;
     // 휴지통에 스냅샷 저장
     const trashedItem = { ...lead, deletedAt: new Date().toISOString() };
     const nextTrash = [trashedItem, ...trash];
@@ -122,8 +121,12 @@ const LeadPipeline = () => {
     const next = [...deletedIds, lead.id];
     setDeletedIds(next);
     await saveDeletedIds(next);
-    // leads state에서도 제거
-    setLeads(prev => prev.filter(l => l.id !== lead.id));
+    // leads state에서도 제거 (고유 _idx 기준, 없으면 id 기준)
+    setLeads(prev => prev.filter(l =>
+      (l._idx !== undefined && lead._idx !== undefined)
+        ? l._idx !== lead._idx
+        : l.id !== lead.id
+    ));
   };
 
   // 휴지통에서 복원
@@ -148,7 +151,6 @@ const LeadPipeline = () => {
 
   // 휴지통에서 영구 삭제
   const permanentDelete = async (item) => {
-    if (!window.confirm(`"${item.customer}"를 영구 삭제할까요?\n복원이 불가능합니다.`)) return;
     const nextTrash = trash.filter(t => t.id !== item.id);
     setTrash(nextTrash);
     await saveTrash(nextTrash);
@@ -161,7 +163,6 @@ const LeadPipeline = () => {
 
   // 휴지통 전체 비우기
   const emptyTrash = async () => {
-    if (!window.confirm(`휴지통의 ${trash.length}개 항목을 모두 영구 삭제할까요?`)) return;
     // 수동 추가 리드 manualLeads에서 제거
     const manualTrashIds = new Set(trash.filter(t => t.id.startsWith('manual-')).map(t => t.id));
     if (manualTrashIds.size > 0) {
@@ -356,6 +357,7 @@ const LeadPipeline = () => {
 
           return {
             id: stableId,
+            _idx: index,
             date: dateVal,
             customer: row[2] || "",
             contact: row[3] || "",
@@ -1114,7 +1116,7 @@ const LeadPipeline = () => {
             const hasTodo = (leadMeta[lead.id]?.todos || []).some(t => !t.done);
             return (
               <div
-                key={lead.id}
+                key={lead._idx !== undefined ? `s-${lead._idx}` : lead.id}
                 onClick={() => setSelectedLead(lead)}
                 style={{
                   display: "grid",
