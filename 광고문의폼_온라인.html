@@ -399,15 +399,15 @@
           source: "ONLINE", // 온라인 폼 표시
         };
 
-        // Google Apps Script로 전송 (no-cors라 응답 읽기 불가 → fire-and-forget)
-        fetch(GOOGLE_APPS_SCRIPT_URL, {
+        // Google Apps Script로 전송 (await를 부활시킴)
+        const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
           method: "POST",
           mode: "no-cors",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(data),
-        }).catch(() => { }); // 에러 무시 (no-cors opaque response)
+        });
 
         // 즉시 성공 처리
         showSuccess();
@@ -430,10 +430,16 @@
       // ⬆️ 성공 메시지로 스크롤
       successMessage.scrollIntoView({ behavior: "smooth", block: "start" });
 
-      // ⏱️ 3초 후 홈으로 이동
+      // ⏱️ 브라우저 기본 알럿을 추가로 띄워서 확실히 보도록 함
       setTimeout(() => {
-        window.location.href = "https://chaovietnam.co.kr/";
-      }, 3000);
+        alert("✅ 문의가 접수되었습니다.\\n빠른 시간 내에 담당자가 연락드리겠습니다.");
+        // 3초 후 홈페이지로 자동 이동 복구
+        if (window.self === window.top) {
+          window.location.href = "https://chaovietnam.co.kr/";
+        } else {
+          window.top.location.href = "https://chaovietnam.co.kr/";
+        }
+      }, 500);
     }
 
     function showError(message) {
