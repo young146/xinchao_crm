@@ -1,0 +1,139 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 관리자 이메일 체크 함수
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'info@chaovietnam.co.kr' ||
+        request.auth.token.email == 'younghan146@gmail.com'
+      );
+    }
+
+    // ========================================
+    // 📦 XinChaoDanggn (나눔/당근) 컬렉션
+    // ========================================
+    match /XinChaoDanggn/{docId} {
+      allow read: if true;
+      allow create: if request.auth != null || request.resource.data.source == 'web';
+      allow update: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isAdmin())
+        || resource.data.source == 'web';
+      allow delete: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // ========================================
+    // 💼 Jobs (구인구직) 컬렉션
+    // ========================================
+    match /Jobs/{jobId} {
+      allow read: if true;
+      allow create: if request.auth != null || request.resource.data.source == 'web';
+      allow update: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isAdmin())
+        || resource.data.source == 'web';
+      allow delete: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // ========================================
+    // 🏠 RealEstate (부동산) 컬렉션
+    // ========================================
+    match /RealEstate/{itemId} {
+      allow read: if true;
+      allow create: if request.auth != null || request.resource.data.source == 'web';
+      allow update: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isAdmin())
+        || resource.data.source == 'web';
+      allow delete: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // ========================================
+    // 👤 사용자 프로필
+    // ========================================
+    match /users/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ========================================
+    // ⭐ 리뷰
+    // ========================================
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ========================================
+    // ❤️ 찜 (즐겨찾기)
+    // ========================================
+    match /favorites/{favoriteId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ========================================
+    // 🔖 북마크
+    // ========================================
+    match /bookmarks/{bookmarkId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ========================================
+    // 💬 채팅방 및 메시지
+    // ========================================
+    match /chatRooms/{roomId} {
+      allow read, write: if request.auth != null;
+      
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // ========================================
+    // 💭 댓글
+    // ========================================
+    match /comments/{commentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // ========================================
+    // 🔔 알림
+    // ========================================
+    match /notifications/{notificationId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ========================================
+    // ⚙️ 알림 설정
+    // ========================================
+    match /notificationSettings/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ========================================
+    // 📋 카카오톡 웹폼 등록 (로그인 불필요)
+    // ========================================
+    match /form_items/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // 💼 CRM 영업 파이프라인 (로그인 불필요 내부 도구)
+    // ========================================
+    match /xinchao_crm/{docId} {
+      allow read, write: if true;
+    }
+
+    // ========================================
+    // 🚫 기본 거부 (위에서 정의되지 않은 모든 문서)
+    // ========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
