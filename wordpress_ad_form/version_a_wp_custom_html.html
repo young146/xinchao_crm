@@ -1,0 +1,1207 @@
+<!-- ========================================================
+  씬짜오베트남 광고 신청 폼 — Version A: WP Custom HTML Block용
+  ■ 사용법: WordPress 에디터 > Custom HTML 블록에 전체 붙여넣기
+  ■ xcv- prefix로 클래스 격리 → WP 테마/플러그인 CSS 충돌 방지
+  ■ 버그 수정: ondragover ev → event
+======================================================== -->
+<style>
+/* ── Reset: xcv- 네임스페이스 내부만 영향 ─────────────────────── */
+.xcv-wrap *, .xcv-wrap *::before, .xcv-wrap *::after {
+  box-sizing: border-box;
+}
+/* CSS 변수는 .xcv-wrap 스코프에 선언 */
+.xcv-wrap {
+  --xcv-brand: #d32f2f;
+  --xcv-brand-dark: #b71c1c;
+  --xcv-brand-light: #fff5f5;
+  --xcv-brand-border: rgba(211,47,47,0.25);
+  --xcv-text: #000000;
+  --xcv-text-sub: #1a1a1a;
+  --xcv-text-muted: #444444;
+  --xcv-bg: #ffffff;
+  --xcv-bg-2: #f8f7f5;
+  --xcv-bg-3: #f0efec;
+  --xcv-border: #d0d0d0;
+  --xcv-border-2: #aaaaaa;
+  --xcv-radius: 8px;
+  --xcv-radius-lg: 12px;
+  --xcv-font: 'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;
+  --xcv-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  font-family: var(--xcv-font);
+  background: var(--xcv-bg-2);
+  color: var(--xcv-text);
+  padding: 32px 16px 80px;
+  font-size: 17px;
+  /* WP 테마 line-height 등 초기화 */
+  line-height: 1.5;
+}
+
+.xcv-wrap {
+  max-width: 660px;
+  margin: 0 auto;
+}
+
+/* 헤더 */
+.xcv-page-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.xcv-page-header .xcv-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.xcv-page-header .xcv-logo-mark {
+  width: 40px; height: 40px;
+  background: var(--xcv-brand);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 12px; font-weight: 700;
+}
+.xcv-page-header .xcv-logo-name { font-size: 17px; font-weight: 700; color: var(--xcv-text); }
+.xcv-page-header h1 { font-size: 32px; font-weight: 900; color: #000000; margin-bottom: 8px; }
+.xcv-page-header p { font-size: 17px; color: #333333; font-weight: 500; margin: 0; }
+
+/* 스텝 바 */
+.xcv-step-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 28px;
+}
+.xcv-step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+}
+.xcv-step-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: calc(50% + 16px);
+  top: 14px;
+  width: calc(100% - 8px);
+  height: 1px;
+  background: var(--xcv-border);
+  z-index: 0;
+}
+.xcv-step-item.xcv-done:not(:last-child)::after { background: var(--xcv-brand); }
+.xcv-step-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--xcv-border);
+  background: var(--xcv-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--xcv-text-muted);
+  position: relative; z-index: 1;
+  transition: all 0.2s;
+  margin: 0;
+}
+.xcv-step-item.xcv-active .xcv-step-dot { border-color: var(--xcv-brand); background: var(--xcv-brand); color: white; }
+.xcv-step-item.xcv-done .xcv-step-dot { border-color: var(--xcv-brand); background: var(--xcv-brand); color: white; }
+.xcv-step-label { font-size: 13px; font-weight: 600; color: #444; white-space: nowrap; }
+.xcv-step-item.xcv-active .xcv-step-label { color: var(--xcv-brand); font-weight: 800; }
+.xcv-step-item.xcv-done .xcv-step-label { color: var(--xcv-brand); }
+.xcv-step-gap { width: 40px; height: 1px; background: var(--xcv-border); margin-bottom: 18px; flex-shrink: 0; }
+.xcv-step-gap.xcv-done { background: var(--xcv-brand); }
+
+/* 카드 */
+.xcv-card {
+  background: var(--xcv-bg);
+  border: 1px solid var(--xcv-border);
+  border-radius: var(--xcv-radius-lg);
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: var(--xcv-shadow);
+}
+.xcv-card-title {
+  font-size: 19px; font-weight: 800;
+  color: #000000;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #222;
+  display: flex; align-items: center; gap: 8px;
+}
+.xcv-card-title span { font-size: 15px; }
+
+/* 폼 요소 */
+.xcv-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.xcv-form-full { grid-column: 1 / -1; }
+.xcv-form-group { display: flex; flex-direction: column; gap: 5px; }
+.xcv-form-label { font-size: 16px; font-weight: 700; color: #000000; margin-bottom: 2px; }
+.xcv-form-label .xcv-req { color: var(--xcv-brand); margin-left: 2px; }
+.xcv-wrap input[type=text],
+.xcv-wrap input[type=email],
+.xcv-wrap input[type=tel],
+.xcv-wrap input[type=date],
+.xcv-wrap select,
+.xcv-wrap textarea {
+  font-family: var(--xcv-font); font-size: 16px;
+  background: var(--xcv-bg-2); border: 2px solid var(--xcv-border);
+  border-radius: var(--xcv-radius); padding: 13px 15px;
+  color: #000000; outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  margin: 0;
+  box-shadow: none;
+}
+.xcv-wrap input[type=text]:focus,
+.xcv-wrap input[type=email]:focus,
+.xcv-wrap input[type=tel]:focus,
+.xcv-wrap input[type=date]:focus,
+.xcv-wrap select:focus,
+.xcv-wrap textarea:focus {
+  border-color: var(--xcv-brand); background: var(--xcv-bg);
+  box-shadow: 0 0 0 3px rgba(211,47,47,0.08);
+  outline: none;
+}
+.xcv-wrap textarea { resize: vertical; min-height: 80px; }
+.xcv-form-hint { font-size: 14px; color: #555555; margin-top: 5px; }
+
+/* 패키지 카드 */
+.xcv-pkg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.xcv-pkg-card {
+  border: 2px solid var(--xcv-border);
+  border-radius: 14px;
+  padding: 22px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--xcv-bg);
+  position: relative;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.xcv-pkg-card:hover {
+  border-color: var(--xcv-brand);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(211,47,47,0.12);
+}
+.xcv-pkg-card.xcv-sel {
+  border-color: var(--xcv-brand);
+  background: var(--xcv-brand-light);
+  box-shadow: 0 8px 28px rgba(211,47,47,0.18);
+  transform: translateY(-2px);
+}
+.xcv-pkg-card.xcv-sel::before {
+  content: '✓ 선택됨';
+  position: absolute; top: 12px; left: 16px;
+  background: var(--xcv-brand); color: white;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px;
+  letter-spacing: 0.3px;
+}
+.xcv-pkg-best {
+  position: absolute; top: 0; right: 0;
+  background: linear-gradient(135deg, #ff6b35, var(--xcv-brand));
+  color: white;
+  font-size: 11px; font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 0 14px 0 12px;
+  letter-spacing: 0.5px;
+}
+.xcv-pkg-tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 700;
+  color: var(--xcv-brand);
+  background: var(--xcv-brand-light);
+  border: 1px solid var(--xcv-brand-border);
+  padding: 3px 10px; border-radius: 20px;
+  margin-bottom: 12px;
+  letter-spacing: 0.3px;
+}
+.xcv-pkg-name {
+  font-size: 20px; font-weight: 800;
+  color: #000000; margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+.xcv-pkg-price {
+  font-size: 32px; font-weight: 900;
+  color: var(--xcv-brand); line-height: 1;
+  margin-bottom: 14px;
+  letter-spacing: -1px;
+}
+.xcv-pkg-price small {
+  font-size: 14px; font-weight: 500;
+  color: var(--xcv-text-muted); letter-spacing: 0;
+}
+.xcv-pkg-divider {
+  height: 1px; background: var(--xcv-border);
+  margin: 0 0 12px;
+}
+.xcv-pkg-desc {
+  font-size: 15px; color: #111111;
+  line-height: 1.8; font-weight: 500;
+  padding: 0; margin: 0; list-style: none;
+}
+.xcv-pkg-desc li {
+  list-style: none;
+  padding: 3px 0;
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.xcv-pkg-desc li::before {
+  content: '·';
+  color: var(--xcv-brand); font-weight: 900; font-size: 18px;
+  flex-shrink: 0; margin-top: 1px;
+}
+
+/* 추가옵션 */
+.xcv-addon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.xcv-addon-item {
+  border: 2px solid var(--xcv-border); border-radius: var(--xcv-radius);
+  padding: 14px 16px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  transition: all 0.15s; background: var(--xcv-bg); user-select: none;
+}
+.xcv-addon-item:hover { border-color: var(--xcv-brand); }
+.xcv-addon-item.xcv-sel { border-color: var(--xcv-brand); background: var(--xcv-brand-light); }
+.xcv-addon-chk {
+  width: 16px; height: 16px; border: 1.5px solid var(--xcv-border-2);
+  border-radius: 4px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.xcv-addon-item.xcv-sel .xcv-addon-chk { background: var(--xcv-brand); border-color: var(--xcv-brand); }
+.xcv-addon-item.xcv-sel .xcv-addon-chk::after {
+  content: ''; display: block; width: 8px; height: 6px;
+  border-left: 2px solid white; border-bottom: 2px solid white;
+  transform: rotate(-45deg) translateY(-1px);
+}
+.xcv-addon-label { font-size: 15px; color: #000000; flex: 1; font-weight: 600; }
+.xcv-addon-price { font-size: 15px; color: var(--xcv-brand); font-weight: 800; white-space: nowrap; }
+
+/* 기간 버튼 */
+.xcv-dur-row { display: flex; gap: 7px; }
+.xcv-dur-btn {
+  flex: 1; padding: 16px 8px; border: 2px solid var(--xcv-border);
+  border-radius: var(--xcv-radius); background: var(--xcv-bg);
+  font-family: var(--xcv-font); font-size: 16px; font-weight: 700; color: #000000;
+  cursor: pointer; text-align: center; line-height: 1.4; transition: all 0.15s;
+}
+.xcv-dur-btn:hover { border-color: var(--xcv-brand); }
+.xcv-dur-btn.xcv-sel { border-color: var(--xcv-brand); background: var(--xcv-brand-light); font-weight: 700; color: var(--xcv-brand); }
+.xcv-dur-disc { display: block; font-size: 13px; color: var(--xcv-brand); font-weight: 800; margin-top: 3px; }
+
+/* 견적 박스 */
+.xcv-estimate-box {
+  background: var(--xcv-bg-2); border: 1px solid var(--xcv-border);
+  border-radius: var(--xcv-radius-lg); padding: 16px 18px;
+  display: none;
+}
+.xcv-estimate-box.xcv-show { display: block; }
+.xcv-est-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; font-size: 16px; color: #111111; font-weight: 500;
+  border-bottom: 1px solid var(--xcv-border);
+}
+.xcv-est-row:last-of-type { border-bottom: none; }
+.xcv-est-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 12px 0 0; margin-top: 4px; border-top: 2px solid var(--xcv-border-2);
+}
+.xcv-est-total-label { font-size: 18px; font-weight: 800; color: #000000; }
+.xcv-est-total-val { font-size: 34px; font-weight: 900; color: var(--xcv-brand); }
+.xcv-disc-badge {
+  font-size: 10px; background: var(--xcv-brand-light); color: var(--xcv-brand);
+  padding: 2px 7px; border-radius: 4px; font-weight: 700; margin-left: 5px;
+}
+
+/* 파일 업로드 */
+.xcv-upload-zone {
+  border: 2px dashed var(--xcv-border-2); border-radius: var(--xcv-radius-lg);
+  padding: 24px 16px; text-align: center; cursor: pointer;
+  transition: all 0.15s; background: var(--xcv-bg-2);
+}
+.xcv-upload-zone:hover, .xcv-upload-zone.xcv-drag { border-color: var(--xcv-brand); background: var(--xcv-brand-light); }
+.xcv-upload-icon { font-size: 28px; margin-bottom: 8px; }
+.xcv-upload-text { font-size: 13px; color: var(--xcv-text-sub); margin-bottom: 4px; }
+.xcv-upload-hint { font-size: 11px; color: var(--xcv-text-muted); }
+.xcv-upload-input { display: none; }
+.xcv-file-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.xcv-file-item {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--xcv-bg); border: 1px solid var(--xcv-border);
+  border-radius: var(--xcv-radius); padding: 8px 10px; font-size: 12px;
+}
+.xcv-file-name { flex: 1; color: var(--xcv-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xcv-file-size { color: var(--xcv-text-muted); white-space: nowrap; }
+.xcv-file-del {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--xcv-bg-3); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--xcv-text-muted); font-size: 12px; flex-shrink: 0;
+  transition: background 0.15s;
+}
+.xcv-file-del:hover { background: #fde; color: var(--xcv-brand); }
+
+/* 견적서 확인 */
+.xcv-quote-card {
+  background: var(--xcv-bg); border: 1px solid var(--xcv-border);
+  border-radius: var(--xcv-radius-lg); overflow: hidden; box-shadow: var(--xcv-shadow);
+}
+.xcv-quote-header {
+  background: var(--xcv-brand); color: white;
+  padding: 20px 24px; display: flex; justify-content: space-between; align-items: flex-start;
+}
+.xcv-quote-header h2 { font-size: 18px; font-weight: 700; margin-bottom: 3px; }
+.xcv-quote-header p { font-size: 12px; opacity: 0.85; margin: 0; }
+.xcv-quote-header .xcv-quote-no { font-size: 13px; text-align: right; opacity: 0.9; }
+.xcv-quote-body { padding: 20px 24px; }
+.xcv-quote-section { margin-bottom: 20px; }
+.xcv-quote-section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--xcv-text-muted);
+  margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--xcv-border);
+}
+.xcv-quote-row {
+  display: flex; justify-content: space-between;
+  padding: 5px 0; font-size: 13px; border-bottom: 1px solid #f5f5f5;
+}
+.xcv-quote-row:last-child { border-bottom: none; }
+.xcv-quote-row .xcv-ql { color: var(--xcv-text-muted); }
+.xcv-quote-row .xcv-qr { font-weight: 600; color: var(--xcv-text); text-align: right; }
+.xcv-quote-total-box {
+  background: var(--xcv-brand-light); border: 1px solid var(--xcv-brand-border);
+  border-radius: var(--xcv-radius); padding: 14px 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 16px;
+}
+.xcv-quote-total-box .xcv-qt-label { font-size: 14px; font-weight: 700; color: var(--xcv-brand); }
+.xcv-quote-total-box .xcv-qt-val { font-size: 24px; font-weight: 800; color: var(--xcv-brand); }
+.xcv-quote-notice {
+  background: var(--xcv-bg-2); border-left: 3px solid var(--xcv-brand);
+  padding: 10px 14px; font-size: 12px; color: var(--xcv-text-sub);
+  margin-top: 14px; border-radius: 0 var(--xcv-radius) var(--xcv-radius) 0;
+  line-height: 1.6;
+}
+
+/* 세무 정보 */
+.xcv-tax-toggle {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; background: var(--xcv-bg-2);
+  border: 1px solid var(--xcv-border); border-radius: var(--xcv-radius);
+  cursor: pointer; margin-bottom: 14px; user-select: none;
+}
+.xcv-tax-toggle input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--xcv-brand); cursor: pointer; }
+.xcv-tax-toggle label { font-size: 13px; font-weight: 600; color: var(--xcv-text); cursor: pointer; margin: 0; }
+.xcv-tax-toggle span { font-size: 12px; color: var(--xcv-text-muted); margin-left: auto; }
+.xcv-tax-fields { display: none; }
+.xcv-tax-fields.xcv-show { display: block; }
+
+/* 동의 */
+.xcv-consent-box {
+  background: var(--xcv-bg-2); border: 1px solid var(--xcv-border);
+  border-radius: var(--xcv-radius); padding: 13px 14px;
+  font-size: 12px; color: var(--xcv-text-sub); line-height: 1.6;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.xcv-consent-box input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--xcv-brand); margin-top: 1px; flex-shrink: 0; }
+
+/* 버튼 */
+.xcv-btn-row { display: flex; gap: 10px; margin-top: 20px; }
+.xcv-btn-back {
+  padding: 13px 20px; border: 1.5px solid var(--xcv-border-2);
+  border-radius: var(--xcv-radius); background: var(--xcv-bg);
+  font-family: var(--xcv-font); font-size: 14px; color: var(--xcv-text);
+  cursor: pointer; transition: background 0.15s; white-space: nowrap;
+}
+.xcv-btn-back:hover { background: var(--xcv-bg-2); }
+.xcv-btn-next {
+  flex: 1; padding: 18px; background: var(--xcv-brand); border: none;
+  border-radius: var(--xcv-radius); font-family: var(--xcv-font);
+  font-size: 18px; font-weight: 800; color: white;
+  cursor: pointer; transition: background 0.15s; letter-spacing: -0.3px;
+}
+.xcv-btn-next:hover { background: var(--xcv-brand-dark); }
+.xcv-btn-next:disabled { background: var(--xcv-border-2); cursor: default; }
+
+/* 완료 화면 */
+.xcv-done-wrap {
+  text-align: center; padding: 48px 20px;
+}
+.xcv-done-icon {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: #e8f5e9; margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+}
+.xcv-done-title { font-size: 28px; font-weight: 900; color: #000000; margin-bottom: 12px; }
+.xcv-done-sub { font-size: 17px; color: #222222; line-height: 1.8; font-weight: 500; }
+.xcv-done-ref {
+  display: inline-block; background: var(--xcv-bg-2); border: 1px solid var(--xcv-border);
+  border-radius: var(--xcv-radius); padding: 10px 20px;
+  font-size: 13px; font-weight: 700; color: var(--xcv-brand); margin: 16px 0;
+  letter-spacing: 1px;
+}
+
+.xcv-hidden { display: none !important; }
+
+/* 에러 메시지 */
+.xcv-err-msg {
+  background: #fff0ee; border-left: 3px solid #d32f2f;
+  padding: 10px 14px; font-size: 13px; color: #b33;
+  border-radius: 0 8px 8px 0; margin-bottom: 10px;
+}
+
+@media (max-width: 540px) {
+  .xcv-wrap { padding: 20px 12px 60px; }
+  .xcv-pkg-grid { grid-template-columns: 1fr 1fr; }
+  .xcv-addon-grid { grid-template-columns: 1fr; }
+  .xcv-form-grid { grid-template-columns: 1fr; }
+  .xcv-form-full { grid-column: auto; }
+  .xcv-dur-row { flex-wrap: wrap; }
+  .xcv-dur-btn { min-width: calc(33% - 6px); }
+  .xcv-step-label { font-size: 9px; }
+  .xcv-card { padding: 16px; }
+  .xcv-page-header h1 { font-size: 26px; }
+}
+</style>
+
+<div class="xcv-wrap" id="xcv-app">
+
+  <!-- 헤더 -->
+  <div class="xcv-page-header">
+    <div class="xcv-logo">
+      <div class="xcv-logo-mark">XCV</div>
+      <div class="xcv-logo-name">씬짜오베트남</div>
+    </div>
+    <h1>광고 신청</h1>
+    <p>신청 후 담당자 검토 및 확인 연락을 드립니다</p>
+  </div>
+
+  <!-- 스텝 바 -->
+  <div class="xcv-step-bar" id="xcv-stepBar">
+    <div class="xcv-step-item xcv-active" id="xcv-si1">
+      <div class="xcv-step-dot">1</div>
+      <div class="xcv-step-label">기본 정보</div>
+    </div>
+    <div class="xcv-step-gap" id="xcv-sg1"></div>
+    <div class="xcv-step-item" id="xcv-si2">
+      <div class="xcv-step-dot">2</div>
+      <div class="xcv-step-label">광고 선택</div>
+    </div>
+    <div class="xcv-step-gap" id="xcv-sg2"></div>
+    <div class="xcv-step-item" id="xcv-si3">
+      <div class="xcv-step-dot">3</div>
+      <div class="xcv-step-label">견적 확인</div>
+    </div>
+    <div class="xcv-step-gap" id="xcv-sg3"></div>
+    <div class="xcv-step-item" id="xcv-si4">
+      <div class="xcv-step-dot">4</div>
+      <div class="xcv-step-label">세무·제출</div>
+    </div>
+  </div>
+
+  <!-- ===== STEP 1: 기본 정보 ===== -->
+  <div id="xcv-step1">
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f3e2;</span> 회사 정보</div>
+      <div class="xcv-form-grid">
+        <div class="xcv-form-group xcv-form-full">
+          <label class="xcv-form-label">회사명 <span class="xcv-req">*</span></label>
+          <input type="text" id="xcv-customerName" placeholder="회사 공식명으로 입력해주세요" oninput="xcvChkS1()" onkeyup="xcvChkS1()"/>
+        </div>
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">담당자명 <span class="xcv-req">*</span></label>
+          <input type="text" id="xcv-contact" placeholder="예: 박영수" oninput="xcvChkS1()" onkeyup="xcvChkS1()"/>
+        </div>
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">직책</label>
+          <input type="text" id="xcv-position" placeholder="예: 마케팅팀장"/>
+        </div>
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">전화 <span class="xcv-req">*</span></label>
+          <input type="tel" id="xcv-phone" placeholder="예: 090-1234-5678" oninput="xcvChkS1()" onkeyup="xcvChkS1()"/>
+        </div>
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">이메일</label>
+          <input type="email" id="xcv-email" placeholder="예: contact@company.com"/>
+        </div>
+      </div>
+    </div>
+    <div id="xcv-s1ErrMsg" class="xcv-err-msg" style="display:none;"></div>
+    <div class="xcv-btn-row">
+      <button class="xcv-btn-next" id="xcv-btnS1" onclick="xcvGoS2()">다음 — 광고 선택 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 2: 광고 선택 ===== -->
+  <div id="xcv-step2" class="xcv-hidden">
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f4e6;</span> 패키지 선택 <span style="color:var(--xcv-brand);font-size:11px;margin-left:4px;">*</span></div>
+      <div class="xcv-pkg-grid">
+
+        <div class="xcv-pkg-card" data-price="250" data-name="디지털 스타터" data-adtype="디지털 스타터" onclick="xcvSelPkg(this)">
+          <div class="xcv-pkg-tag">디지털 전용</div>
+          <div class="xcv-pkg-name">디지털 스타터</div>
+          <div class="xcv-pkg-price">$250 <small>/ 월</small></div>
+          <div class="xcv-pkg-divider"></div>
+          <ul class="xcv-pkg-desc">
+            <li>이메일 홍보카드 월 4회 발송</li>
+            <li>웹사이트 인너배너 1개</li>
+            <li>4,000명 직접 도달</li>
+          </ul>
+        </div>
+
+        <div class="xcv-pkg-card" data-price="350" data-name="디지털 프리미엄" data-adtype="디지털 프리미엄" onclick="xcvSelPkg(this)">
+          <div class="xcv-pkg-tag">디지털 전용</div>
+          <div class="xcv-pkg-name">디지털 프리미엄</div>
+          <div class="xcv-pkg-price">$350 <small>/ 월</small></div>
+          <div class="xcv-pkg-divider"></div>
+          <ul class="xcv-pkg-desc">
+            <li>이메일 홍보카드 월 4회</li>
+            <li>웹사이트 인너배너</li>
+            <li>앱 인너배너 + 앱 하단배너</li>
+          </ul>
+        </div>
+
+        <div class="xcv-pkg-card" data-price="500" data-name="디지털 베스트" data-adtype="디지털 베스트" onclick="xcvSelPkg(this)">
+          <div class="xcv-pkg-tag">디지털 전용</div>
+          <div class="xcv-pkg-name">디지털 베스트</div>
+          <div class="xcv-pkg-price">$500 <small>/ 월</small></div>
+          <div class="xcv-pkg-divider"></div>
+          <ul class="xcv-pkg-desc">
+            <li>이메일 홍보카드 월 4회</li>
+            <li>웹 헤드배너 + 하단배너</li>
+            <li>앱 헤더배너 + 하단배너</li>
+          </ul>
+        </div>
+
+        <div class="xcv-pkg-card" data-price="1050" data-name="통합 패키지 A" data-adtype="통합 패키지 A" onclick="xcvSelPkg(this)">
+          <div class="xcv-pkg-tag">잡지 + 디지털</div>
+          <div class="xcv-pkg-name">통합 패키지 A</div>
+          <div class="xcv-pkg-price">$1,050 <small>/ 월</small></div>
+          <div class="xcv-pkg-divider"></div>
+          <ul class="xcv-pkg-desc">
+            <li>잡지 전면 1페이지</li>
+            <li>디지털 스타터 포함</li>
+            <li>디지털 40% 할인 적용</li>
+          </ul>
+        </div>
+
+        <div class="xcv-pkg-card" data-price="1150" data-name="통합 패키지 B" data-adtype="통합 패키지 B" onclick="xcvSelPkg(this)">
+          <div class="xcv-pkg-best">베스트</div>
+          <div class="xcv-pkg-tag">잡지 + 디지털</div>
+          <div class="xcv-pkg-name">통합 패키지 B</div>
+          <div class="xcv-pkg-price">$1,150 <small>/ 월</small></div>
+          <div class="xcv-pkg-divider"></div>
+          <ul class="xcv-pkg-desc">
+            <li>잡지 전면 1페이지</li>
+            <li>디지털 프리미엄 포함</li>
+            <li>이웃사업 소개 카드 포함</li>
+          </ul>
+        </div>
+
+        <div class="xcv-pkg-card" data-price="1250" data-name="통합 패키지 C" data-adtype="통합 패키지 C" onclick="xcvSelPkg(this)">
+          <div class="xcv-pkg-tag">잡지 + 디지털</div>
+          <div class="xcv-pkg-name">통합 패키지 C</div>
+          <div class="xcv-pkg-price">$1,250 <small>/ 월</small></div>
+          <div class="xcv-pkg-divider"></div>
+          <ul class="xcv-pkg-desc">
+            <li>잡지 전면 1페이지</li>
+            <li>디지털 베스트 포함</li>
+            <li>이웃사업 소개 카드 포함</li>
+          </ul>
+        </div>
+
+        <div class="xcv-pkg-card" data-price="3000" data-name="프리미엄 올인원" data-adtype="프리미엄 올인원" onclick="xcvSelPkg(this)" style="grid-column: 1 / -1; background: linear-gradient(135deg, #fff5f5 0%, #fff 60%); border-color: #e0a0a0;">
+          <div class="xcv-pkg-tag" style="background:#d32f2f;color:white;border-color:#d32f2f;">최고급 패키지</div>
+          <div class="xcv-pkg-name" style="font-size:22px;">프리미엄 올인원</div>
+          <div class="xcv-pkg-price">$3,000 <small>/ 월</small></div>
+          <div class="xcv-pkg-divider"></div>
+          <ul class="xcv-pkg-desc" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px;">
+            <li>잡지 백커버 (후면 표지)</li>
+            <li>디지털 베스트 전체 포함</li>
+            <li>이웃사업 소개 카드 포함</li>
+            <li>최대 노출 · 최고 신뢰도</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x2795;</span> 단품 추가 옵션 <span style="font-size:10px;color:var(--xcv-text-muted);font-weight:400;text-transform:none;letter-spacing:0;">(선택)</span></div>
+      <div class="xcv-addon-grid">
+        <div class="xcv-addon-item" data-price="50" data-name="이메일 홍보카드 추가 1회" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">이메일 홍보카드 추가 1회</span>
+          <span class="xcv-addon-price">+$50</span>
+        </div>
+        <div class="xcv-addon-item" data-price="150" data-name="웹사이트 헤드 배너" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">웹사이트 헤드 배너</span>
+          <span class="xcv-addon-price">+$150/월</span>
+        </div>
+        <div class="xcv-addon-item" data-price="80" data-name="웹사이트 내부·푸터 배너" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">웹사이트 내부·푸터 배너</span>
+          <span class="xcv-addon-price">+$80/월</span>
+        </div>
+        <div class="xcv-addon-item" data-price="120" data-name="앱 헤드 배너" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">앱 헤드 배너</span>
+          <span class="xcv-addon-price">+$120/월</span>
+        </div>
+        <div class="xcv-addon-item" data-price="70" data-name="앱 내부·푸터 배너" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">앱 내부·푸터 배너</span>
+          <span class="xcv-addon-price">+$70/월</span>
+        </div>
+        <div class="xcv-addon-item" data-price="100" data-name="이웃사업 소개 카드" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">이웃사업 소개 카드</span>
+          <span class="xcv-addon-price">+$100</span>
+        </div>
+      </div>
+
+      <div style="font-size:15px;font-weight:800;color:#111;margin:20px 0 12px;padding-top:18px;border-top:2px solid #ddd;">잡지 단독 지면 광고 <span style="font-size:13px;font-weight:500;color:#555;">(월 2회 발행 기준)</span></div>
+      <div class="xcv-addon-grid">
+        <div class="xcv-addon-item" data-price="900" data-name="잡지 전면 ($900/월)" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">잡지 전면</span>
+          <span class="xcv-addon-price">$900/월</span>
+        </div>
+        <div class="xcv-addon-item" data-price="500" data-name="잡지 1/2면 ($500/월)" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">잡지 1/2면</span>
+          <span class="xcv-addon-price">$500/월</span>
+        </div>
+        <div class="xcv-addon-item" data-price="300" data-name="잡지 1/4면 ($300/월)" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">잡지 1/4면</span>
+          <span class="xcv-addon-price">$300/월</span>
+        </div>
+        <div class="xcv-addon-item" data-price="240" data-name="옐로페이지 1단 ($240)" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">옐로페이지 1단</span>
+          <span class="xcv-addon-price">$240</span>
+        </div>
+        <div class="xcv-addon-item" data-price="480" data-name="옐로페이지 2단 ($480)" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">옐로페이지 2단</span>
+          <span class="xcv-addon-price">$480</span>
+        </div>
+        <div class="xcv-addon-item" data-price="960" data-name="옐로페이지 4단 ($960)" onclick="xcvTogAddon(this)">
+          <div class="xcv-addon-chk"></div>
+          <span class="xcv-addon-label">옐로페이지 4단</span>
+          <span class="xcv-addon-price">$960</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f4c5;</span> 집행 기간 <span style="color:var(--xcv-brand);font-size:11px;margin-left:4px;">*</span></div>
+      <div class="xcv-dur-row">
+        <button type="button" class="xcv-dur-btn" data-m="1" data-d="0" onclick="xcvSelDur(this)">1개월</button>
+        <button type="button" class="xcv-dur-btn" data-m="2" data-d="0" onclick="xcvSelDur(this)">2개월</button>
+        <button type="button" class="xcv-dur-btn" data-m="3" data-d="5" onclick="xcvSelDur(this)">3개월<span class="xcv-dur-disc">-5%</span></button>
+        <button type="button" class="xcv-dur-btn" data-m="6" data-d="10" onclick="xcvSelDur(this)">6개월<span class="xcv-dur-disc">-10%</span></button>
+        <button type="button" class="xcv-dur-btn" data-m="12" data-d="15" onclick="xcvSelDur(this)">12개월<span class="xcv-dur-disc">-15%</span></button>
+      </div>
+    </div>
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f4c5;</span> 예상 시작일</div>
+      <div class="xcv-form-group">
+        <input type="date" id="xcv-startDate"/>
+        <div class="xcv-form-hint">희망 게재 시작일을 선택해주세요 (확정은 담당자 확인 후)</div>
+      </div>
+    </div>
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f4ce;</span> 광고 소재 파일 <span style="font-size:10px;color:var(--xcv-text-muted);font-weight:400;text-transform:none;letter-spacing:0;">(선택 — 나중에 이메일로 보내도 됩니다)</span></div>
+      <!-- [버그수정] ondragover: ev.preventDefault() → event.preventDefault() -->
+      <div class="xcv-upload-zone" id="xcv-uploadZone"
+           onclick="document.getElementById('xcv-fileInput').click()"
+           ondragover="event.preventDefault();this.classList.add('xcv-drag')"
+           ondragleave="this.classList.remove('xcv-drag')"
+           ondrop="xcvDropFiles(event)">
+        <div class="xcv-upload-icon">&#x1f4c1;</div>
+        <div class="xcv-upload-text">클릭하거나 파일을 드래그해서 올려주세요</div>
+        <div class="xcv-upload-hint">이미지(JPG·PNG·GIF) · 영상(MP4·MOV) · 문서(PDF·AI·PSD) · 최대 10MB/파일</div>
+      </div>
+      <input type="file" id="xcv-fileInput" class="xcv-upload-input" multiple
+             accept="image/*,video/*,.pdf,.ai,.psd,.eps,.zip"
+             onchange="xcvAddFiles(this.files)"/>
+      <div class="xcv-file-list" id="xcv-fileList"></div>
+    </div>
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f4ac;</span> 요청사항</div>
+      <div class="xcv-form-group">
+        <textarea id="xcv-remark" placeholder="광고 목적, 타깃 고객, 강조할 내용, 예산, 기타 요청사항 등 자유롭게 작성해주세요"></textarea>
+      </div>
+    </div>
+
+    <div class="xcv-btn-row">
+      <button class="xcv-btn-back" onclick="xcvGoStep(1)">← 이전</button>
+      <button class="xcv-btn-next" id="xcv-btnS2" onclick="xcvGoStep(3)" disabled>견적 확인 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 3: 견적 확인 ===== -->
+  <div id="xcv-step3" class="xcv-hidden">
+    <div class="xcv-quote-card">
+      <div class="xcv-quote-header">
+        <div>
+          <h2>견적서</h2>
+          <p>씬짜오베트남 광고 신청</p>
+        </div>
+        <div class="xcv-quote-no" id="xcv-quoteNo"></div>
+      </div>
+      <div class="xcv-quote-body">
+        <div class="xcv-quote-section">
+          <div class="xcv-quote-section-title">신청자 정보</div>
+          <div class="xcv-quote-row"><span class="xcv-ql">회사명</span><span class="xcv-qr" id="xcv-q-company"></span></div>
+          <div class="xcv-quote-row"><span class="xcv-ql">담당자</span><span class="xcv-qr" id="xcv-q-contact"></span></div>
+          <div class="xcv-quote-row"><span class="xcv-ql">연락처</span><span class="xcv-qr" id="xcv-q-phone"></span></div>
+        </div>
+        <div class="xcv-quote-section">
+          <div class="xcv-quote-section-title">광고 내역</div>
+          <div id="xcv-q-items"></div>
+          <div class="xcv-quote-row"><span class="xcv-ql">집행 기간</span><span class="xcv-qr" id="xcv-q-term"></span></div>
+          <div class="xcv-quote-row"><span class="xcv-ql">예상 시작일</span><span class="xcv-qr" id="xcv-q-start"></span></div>
+        </div>
+        <div class="xcv-quote-total-box">
+          <span class="xcv-qt-label">최종 견적 금액</span>
+          <span class="xcv-qt-val" id="xcv-q-total"></span>
+        </div>
+        <div class="xcv-quote-notice">
+          ※ 본 견적은 참고용이며, 담당자 검토 후 최종 금액이 확정됩니다.<br />
+          ※ 광고 자리 및 디자인 확인 후 입금 안내를 드립니다.
+        </div>
+      </div>
+    </div>
+    <div class="xcv-btn-row" style="margin-top:16px;">
+      <button class="xcv-btn-back" onclick="xcvGoStep(2)">← 수정</button>
+      <button class="xcv-btn-next" onclick="xcvGoStep(4)">이 견적으로 신청 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 4: 세무 정보 + 제출 ===== -->
+  <div id="xcv-step4" class="xcv-hidden">
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f3e2;</span> 광고주 회사 소개</div>
+      <div class="xcv-form-group" style="margin-bottom:12px;">
+        <label class="xcv-form-label">회사 소개 / 업종 / 주요 제품·서비스</label>
+        <textarea id="xcv-companyInfo" placeholder="예: 하노이 소재 한식 레스토랑, 15년 운영&#10;광고 타깃: 하노이 거주 한국 교민 및 주재원" style="min-height:100px;"></textarea>
+      </div>
+      <div class="xcv-form-grid">
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">웹사이트</label>
+          <input type="text" id="xcv-companyWeb" placeholder="https://..."/>
+        </div>
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">SNS / 카카오채널</label>
+          <input type="text" id="xcv-companySns" placeholder="인스타그램, 페이스북, 카카오 등"/>
+        </div>
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">사업장 주소</label>
+          <input type="text" id="xcv-companyAddr" placeholder="베트남 내 사업장 주소"/>
+        </div>
+        <div class="xcv-form-group">
+          <label class="xcv-form-label">광고 타깃 고객</label>
+          <input type="text" id="xcv-companyTarget" placeholder="예: 한인 교민, 주재원, 베트남 현지인 등"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x1f9fe;</span> 세금계산서 발행 정보</div>
+      <div class="xcv-tax-toggle" onclick="xcvTogTax()">
+        <input type="checkbox" id="xcv-taxChk"/>
+        <label for="xcv-taxChk">세금계산서 발행을 원합니다</label>
+        <span>선택사항</span>
+      </div>
+      <div class="xcv-tax-fields" id="xcv-taxFields">
+        <div class="xcv-form-grid">
+          <div class="xcv-form-group">
+            <label class="xcv-form-label">사업자등록번호 <span class="xcv-req">*</span></label>
+            <input type="text" id="xcv-bizNo" placeholder="000-00-00000"/>
+          </div>
+          <div class="xcv-form-group">
+            <label class="xcv-form-label">상호 <span class="xcv-req">*</span></label>
+            <input type="text" id="xcv-bizName" placeholder="사업자 등록상 상호"/>
+          </div>
+          <div class="xcv-form-group">
+            <label class="xcv-form-label">대표자명 <span class="xcv-req">*</span></label>
+            <input type="text" id="xcv-bizCeo" placeholder="대표자 성명"/>
+          </div>
+          <div class="xcv-form-group">
+            <label class="xcv-form-label">업태 / 종목</label>
+            <input type="text" id="xcv-bizType" placeholder="예: 서비스업 / 광고"/>
+          </div>
+          <div class="xcv-form-group xcv-form-full">
+            <label class="xcv-form-label">사업장 주소 <span class="xcv-req">*</span></label>
+            <input type="text" id="xcv-bizAddr" placeholder="사업자 등록상 주소"/>
+          </div>
+          <div class="xcv-form-group xcv-form-full">
+            <label class="xcv-form-label">세금계산서 수신 이메일 <span class="xcv-req">*</span></label>
+            <input type="email" id="xcv-taxEmail" placeholder="계산서를 받을 이메일"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="xcv-card">
+      <div class="xcv-card-title"><span>&#x2705;</span> 최종 확인</div>
+      <div class="xcv-estimate-box xcv-show" id="xcv-finalEstimate"></div>
+      <div class="xcv-consent-box" style="margin-top:14px;">
+        <input type="checkbox" id="xcv-consent"/>
+        <span>개인정보 수집 및 이용에 동의합니다. 수집된 정보는 광고 문의 처리 목적으로만 사용됩니다.</span>
+      </div>
+    </div>
+
+    <div id="xcv-errMsg" class="xcv-err-msg xcv-hidden"></div>
+
+    <div class="xcv-btn-row">
+      <button class="xcv-btn-back" onclick="xcvGoStep(3)">← 이전</button>
+      <button class="xcv-btn-next" id="xcv-btnSubmit" onclick="xcvSubmitForm()">광고 신청 제출 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 5: 완료 ===== -->
+  <div id="xcv-step5" class="xcv-hidden">
+    <div class="xcv-card">
+      <div class="xcv-done-wrap">
+        <div class="xcv-done-icon">&#x2705;</div>
+        <div class="xcv-done-title">광고 신청이 접수되었습니다</div>
+        <div class="xcv-done-ref" id="xcv-doneRef"></div>
+        <div class="xcv-done-sub">
+          담당자가 신청 내용을 검토한 후<br />
+          <strong>1~2 영업일 내</strong>로 연락드립니다.<br /><br />
+          광고 자리 확인 및 디자인 제작 후<br />
+          최종 금액 확정 및 입금 안내를 드립니다.<br /><br />
+          기타 추가 문의사항이 있으시면<br />
+          <strong>info@chaovietnam.co.kr</strong> 로 보내주세요.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.xcv-wrap -->
+
+<script>
+(function() {
+'use strict';
+
+// ===== 상태 =====
+var S = {
+  pkg: null, addons: [], months: null, discount: 0,
+  baseMonthly: 0, total: 0, files: []
+};
+
+// ===== GAS URL =====
+var GAS_URL = "https://script.google.com/macros/s/AKfycbw1rd5SbMDMSxDYbCarcuJ5chVgcKKQgEvyJfXR0xEpYxs-tP93ZJigYoB6XgDzfoOpGQ/exec";
+
+// ===== ID 헬퍼 =====
+function g(id){ return document.getElementById('xcv-'+id); }
+
+// ===== STEP 이동 =====
+function xcvGoStep(n) {
+  [1,2,3,4,5].forEach(function(i){
+    g('step'+i).classList.add('xcv-hidden');
+    var si = g('si'+i);
+    if(si){ si.classList.remove('xcv-active','xcv-done'); }
+    var sg = g('sg'+i);
+    if(sg){ sg.classList.remove('xcv-done'); }
+  });
+  g('step'+n).classList.remove('xcv-hidden');
+  for(var i=1;i<n;i++){
+    var si = g('si'+i);
+    if(si) si.classList.add('xcv-done');
+    var sg = g('sg'+i);
+    if(sg) sg.classList.add('xcv-done');
+  }
+  var active = g('si'+n);
+  if(active) active.classList.add('xcv-active');
+  if(n===3) xcvRenderQuote();
+  if(n===4) xcvRenderFinalEstimate();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+window.xcvGoStep = xcvGoStep;
+
+// ===== STEP 1 검증 =====
+function xcvChkS1(){}
+window.xcvChkS1 = xcvChkS1;
+
+function xcvGoS2(){
+  var name  = g('customerName').value.trim();
+  var cont  = g('contact').value.trim();
+  var phone = g('phone').value.trim();
+  var errEl = g('s1ErrMsg');
+  if(!name){
+    errEl.textContent='회사명을 입력해주세요.';
+    errEl.style.display='block';
+    g('customerName').focus(); return;
+  }
+  if(!cont){
+    errEl.textContent='담당자명을 입력해주세요.';
+    errEl.style.display='block';
+    g('contact').focus(); return;
+  }
+  if(!phone){
+    errEl.textContent='전화번호를 입력해주세요.';
+    errEl.style.display='block';
+    g('phone').focus(); return;
+  }
+  errEl.style.display='none';
+  xcvGoStep(2);
+}
+window.xcvGoS2 = xcvGoS2;
+
+// ===== STEP 2 =====
+function xcvSelPkg(el){
+  document.querySelectorAll('#xcv-app .xcv-pkg-card').forEach(function(c){ c.classList.remove('xcv-sel'); });
+  el.classList.add('xcv-sel');
+  S.pkg = { price: parseInt(el.dataset.price), name: el.dataset.name, adtype: el.dataset.adtype };
+  xcvCalc(); xcvCheckS2();
+}
+window.xcvSelPkg = xcvSelPkg;
+
+function xcvTogAddon(el){
+  el.classList.toggle('xcv-sel');
+  var p=parseInt(el.dataset.price), n=el.dataset.name;
+  var i=S.addons.findIndex(function(a){return a.name===n;});
+  if(i>=0) S.addons.splice(i,1); else S.addons.push({name:n,price:p});
+  xcvCalc();
+}
+window.xcvTogAddon = xcvTogAddon;
+
+function xcvSelDur(el){
+  document.querySelectorAll('#xcv-app .xcv-dur-btn').forEach(function(b){b.classList.remove('xcv-sel');});
+  el.classList.add('xcv-sel');
+  S.months=parseInt(el.dataset.m); S.discount=parseInt(el.dataset.d);
+  xcvCalc(); xcvCheckS2();
+}
+window.xcvSelDur = xcvSelDur;
+
+function xcvCalc(){
+  if(!S.pkg||!S.months) return;
+  S.baseMonthly = S.pkg.price + S.addons.reduce(function(s,a){return s+a.price;},0);
+  S.total = Math.round(S.baseMonthly * S.months * (1 - S.discount/100));
+}
+
+function xcvCheckS2(){
+  g('btnS2').disabled = !(S.pkg && S.months);
+}
+
+// ===== 파일 업로드 =====
+function xcvAddFiles(files){
+  Array.from(files).forEach(function(f){
+    if(f.size > 10*1024*1024){ alert(f.name+' 파일이 10MB를 초과합니다.'); return; }
+    if(S.files.find(function(x){return x.name===f.name;})) return;
+    S.files.push(f);
+  });
+  xcvRenderFiles();
+  g('fileInput').value='';
+}
+window.xcvAddFiles = xcvAddFiles;
+
+function xcvDropFiles(e){
+  e.preventDefault();
+  g('uploadZone').classList.remove('xcv-drag');
+  xcvAddFiles(e.dataTransfer.files);
+}
+window.xcvDropFiles = xcvDropFiles;
+
+function xcvDelFile(name){
+  S.files = S.files.filter(function(f){return f.name!==name;});
+  xcvRenderFiles();
+}
+window.xcvDelFile = xcvDelFile;
+
+function xcvRenderFiles(){
+  var html='';
+  S.files.forEach(function(f){
+    var kb = f.size < 1024*1024 ? Math.round(f.size/1024)+'KB' : (f.size/1024/1024).toFixed(1)+'MB';
+    html += '<div class="xcv-file-item">'
+          + '<span style="font-size:16px;">&#x1f4c4;</span>'
+          + '<span class="xcv-file-name">'+f.name+'</span>'
+          + '<span class="xcv-file-size">'+kb+'</span>'
+          + '<button class="xcv-file-del" onclick="xcvDelFile(\''+f.name.replace(/'/g,"\\'")+'\')">✕</button>'
+          + '</div>';
+  });
+  g('fileList').innerHTML = html;
+}
+
+// ===== STEP 3: 견적서 =====
+function xcvRenderQuote(){
+  xcvCalc();
+  g('q-company').textContent = g('customerName').value;
+  g('q-contact').textContent = g('contact').value + (g('position').value?' ('+g('position').value+')':'');
+  g('q-phone').textContent = g('phone').value;
+  g('q-term').textContent = S.months+'개월'+(S.discount>0?' ('+S.discount+'% 할인 적용)':'');
+  var sd = g('startDate').value;
+  g('q-start').textContent = sd || '미정';
+  var addonSum = S.addons.reduce(function(s,a){return s+a.price;},0);
+  var discAmt = Math.round(S.baseMonthly * S.months * S.discount/100);
+  var rows = '<div class="xcv-quote-row"><span class="xcv-ql">'+S.pkg.name+'</span><span class="xcv-qr">$'+S.pkg.price.toLocaleString()+' / 월</span></div>';
+  S.addons.forEach(function(a){
+    rows += '<div class="xcv-quote-row"><span class="xcv-ql">+ '+a.name+'</span><span class="xcv-qr">+$'+a.price+'</span></div>';
+  });
+  rows += '<div class="xcv-quote-row"><span class="xcv-ql">월 소계</span><span class="xcv-qr">$'+S.baseMonthly.toLocaleString()+'</span></div>';
+  if(S.discount>0) rows += '<div class="xcv-quote-row"><span class="xcv-ql">장기 할인 <span class="xcv-disc-badge">-'+S.discount+'%</span></span><span class="xcv-qr" style="color:var(--xcv-brand);">- $'+discAmt.toLocaleString()+'</span></div>';
+  g('q-items').innerHTML = rows;
+  g('q-total').textContent = '$'+S.total.toLocaleString()+' USD';
+  var now = new Date();
+  g('quoteNo').innerHTML = '견적번호: XCV-'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'-'+Math.floor(Math.random()*900+100)+'<br />작성일: '+now.toLocaleDateString('ko-KR');
+}
+
+// ===== STEP 4: 최종 견적 =====
+function xcvRenderFinalEstimate(){
+  var discAmt = Math.round(S.baseMonthly * S.months * S.discount/100);
+  var html = '';
+  html += '<div class="xcv-est-row"><span>'+S.pkg.name+'</span><span>$'+S.pkg.price.toLocaleString()+'/월</span></div>';
+  S.addons.forEach(function(a){ html+='<div class="xcv-est-row"><span>+ '+a.name+'</span><span>$'+a.price+'</span></div>'; });
+  html += '<div class="xcv-est-row"><span>집행 기간</span><span>'+S.months+'개월</span></div>';
+  if(S.discount>0) html+='<div class="xcv-est-row"><span>장기 할인 <span class="xcv-disc-badge">-'+S.discount+'%</span></span><span style="color:var(--xcv-brand);">-$'+discAmt.toLocaleString()+'</span></div>';
+  html += '<div class="xcv-est-total"><span class="xcv-est-total-label">최종 견적</span><span class="xcv-est-total-val">$'+S.total.toLocaleString()+' USD</span></div>';
+  g('finalEstimate').innerHTML = html;
+}
+
+// ===== 세무 정보 토글 =====
+function xcvTogTax(){
+  var chk = g('taxChk');
+  chk.checked = !chk.checked;
+  g('taxFields').classList.toggle('xcv-show', chk.checked);
+}
+window.xcvTogTax = xcvTogTax;
+
+// ===== 제출 =====
+async function xcvSubmitForm(){
+  var errEl = g('errMsg');
+  errEl.classList.add('xcv-hidden');
+  if(!g('consent').checked){
+    errEl.textContent='개인정보 수집에 동의해주세요.';
+    errEl.classList.remove('xcv-hidden'); return;
+  }
+  var taxChk = g('taxChk').checked;
+  if(taxChk){
+    if(!g('bizNo').value.trim()
+      ||!g('bizName').value.trim()
+      ||!g('bizCeo').value.trim()
+      ||!g('bizAddr').value.trim()
+      ||!g('taxEmail').value.trim()){
+      errEl.textContent='세금계산서 발행 정보를 모두 입력해주세요.';
+      errEl.classList.remove('xcv-hidden'); return;
+    }
+  }
+  var btn = g('btnSubmit');
+  btn.disabled=true; btn.textContent='제출 중...';
+
+  var taxInfo = '';
+  if(taxChk){
+    taxInfo = '\n\n[세금계산서 정보]\n'
+      +'사업자번호: '+g('bizNo').value+'\n'
+      +'상호: '+g('bizName').value+'\n'
+      +'대표자: '+g('bizCeo').value+'\n'
+      +'업태/종목: '+g('bizType').value+'\n'
+      +'주소: '+g('bizAddr').value+'\n'
+      +'수신이메일: '+g('taxEmail').value;
+  }
+  var fileNames = S.files.length ? '\n\n[첨부 파일]\n'+S.files.map(function(f){return f.name;}).join(', ') : '';
+  var addonNames = S.addons.length ? S.addons.map(function(a){return a.name;}).join(', ') : '';
+
+  var data = {
+    date:         new Date().toISOString().split('T')[0],
+    customerName: g('customerName').value,
+    contact:      g('contact').value,
+    position:     g('position').value,
+    phone:        g('phone').value,
+    email:        g('email').value,
+    adType:       S.pkg.name,
+    size:         addonNames || '-',
+    startDate:    g('startDate').value,
+    vol:          '',
+    term:         S.months+'개월'+(S.discount>0?' (-'+S.discount+'%)':''),
+    remark:       '견적금액: $'+S.total.toLocaleString()+' USD'
+                  +'\n월소계: $'+S.baseMonthly.toLocaleString()+'/월'
+                  +'\n기간: '+S.months+'개월'
+                  +(g('remark').value ? '\n\n[요청사항]\n'+g('remark').value : '')
+                  +(g('companyInfo').value ? '\n\n[회사소개]\n'+g('companyInfo').value : '')
+                  +(g('companyWeb').value ? '\n웹사이트: '+g('companyWeb').value : '')
+                  +(g('companySns').value ? '\nSNS: '+g('companySns').value : '')
+                  +(g('companyAddr').value ? '\n주소: '+g('companyAddr').value : '')
+                  +(g('companyTarget').value ? '\n타깃: '+g('companyTarget').value : '')
+                  +taxInfo
+                  +fileNames,
+    source:       'ONLINE',
+  };
+
+  fetch(GAS_URL, {
+    method:'POST', mode:'no-cors',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  }).catch(function(){});
+
+  var now = new Date();
+  var refNo = 'XCV-'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'-'+Math.floor(Math.random()*900+100);
+  g('doneRef').textContent = '접수번호: '+refNo;
+  xcvGoStep(5);
+}
+window.xcvSubmitForm = xcvSubmitForm;
+
+// ===== URL 파라미터 자동 선택 (챗봇 연동) =====
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var pkg    = params.get('pkg');
+  var months = params.get('months');
+  var addons = params.get('addons');
+
+  if (!pkg && !months && !addons) return;
+
+  // 안내 메시지 삽입 (Step1 카드 위)
+  var step1 = document.getElementById('xcv-step1');
+  if (step1) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'background:#fff5f5;border:1.5px solid #d32f2f;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:14px;color:#b71c1c;font-weight:600;line-height:1.6;';
+    banner.textContent = '챗봇 추천 패키지가 선택되었습니다. 기본 정보를 입력 후 다음으로 진행하세요.';
+    step1.insertBefore(banner, step1.firstChild);
+  }
+
+  // pkg 자동 선택
+  if (pkg) {
+    var pkgName = decodeURIComponent(pkg);
+    var pkgCards = document.querySelectorAll('#xcv-app .xcv-pkg-card');
+    pkgCards.forEach(function(card) {
+      if (card.dataset.name === pkgName) {
+        xcvSelPkg(card);
+      }
+    });
+  }
+
+  // months 자동 선택
+  if (months) {
+    var m = parseInt(months, 10);
+    var durBtns = document.querySelectorAll('#xcv-app .xcv-dur-btn');
+    durBtns.forEach(function(btn) {
+      if (parseInt(btn.dataset.m, 10) === m) {
+        xcvSelDur(btn);
+      }
+    });
+  }
+
+  // addons 자동 선택 (쉼표 구분, URL 디코딩)
+  if (addons) {
+    var addonList = addons.split(',').map(function(a) { return decodeURIComponent(a.trim()); });
+    var addonItems = document.querySelectorAll('#xcv-app .xcv-addon-item');
+    addonItems.forEach(function(item) {
+      if (addonList.indexOf(item.dataset.name) !== -1) {
+        xcvTogAddon(item);
+      }
+    });
+  }
+})();
+
+})();
+</script>

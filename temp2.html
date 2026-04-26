@@ -1,0 +1,442 @@
+﻿<!doctype html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>광고 문의 - Xinchao Vietnam</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+        "Ubuntu", "Cantarell", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      color: #d32f2f;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    label .required {
+      color: #f44336;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    input[type="tel"]:focus,
+    input[type="date"]:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #d32f2f;
+      box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .row.full {
+      grid-template-columns: 1fr;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 30px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-submit {
+      background: #d32f2f;
+      color: white;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      background: #b71c1c;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(211, 47, 47, 0.3);
+    }
+
+    .btn-submit:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn-reset {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .btn-reset:hover {
+      background: #e0e0e0;
+    }
+
+    .success-message {
+      display: none;
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      color: #2e7d32;
+      padding: 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    .success-message.show {
+      display: block;
+    }
+
+    .error-message {
+      display: none;
+      background: #ffebee;
+      border-left: 4px solid #f44336;
+      color: #c62828;
+      padding: 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .info-box {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #1565c0;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 24px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .row {
+        grid-template-columns: 1fr;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+    }
+
+    .loading {
+      display: inline-block;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: white;
+      margin-left: 4px;
+      animation: dots 1.4s infinite;
+    }
+
+    @keyframes dots {
+
+      0%,
+      20%,
+      80%,
+      100% {
+        opacity: 0.5;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📢 광고 문의</h1>
+      <p>Xinchao Vietnam 매거진 광고 문의</p>
+    </div>
+
+    <div id="successMessage" class="success-message">
+      <strong>✅ 문의가 접수되었습니다!</strong><br />
+      빠른 시간 내에 담당자가 연락드리겠습니다.
+    </div>
+
+    <div id="errorMessage" class="error-message">
+      <strong>⚠️ 오류가 발생했습니다!</strong><br />
+      <span id="errorText"></span>
+    </div>
+
+    <form id="inquiryForm">
+      <!-- 회사 정보 -->
+      <h3 style="color: #333; margin: 25px 0 15px 0; font-size: 16px">
+        📋 회사 정보
+      </h3>
+
+      <div class="form-group">
+        <label>회사명 <span class="required">*</span></label>
+        <input type="text" name="customerName" required placeholder="예: 삼성전자" />
+        <div class="info-box">회사 공식명으로 입력해주세요</div>
+      </div>
+
+      <div class="row">
+        <div class="form-group">
+          <label>담당자명 <span class="required">*</span></label>
+          <input type="text" name="contact" placeholder="예: 박영수" required />
+        </div>
+        <div class="form-group">
+          <label>직책</label>
+          <input type="text" name="position" placeholder="예: 마케팅팀장" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="form-group">
+          <label>전화 <span class="required">*</span></label>
+          <input type="tel" name="phone" placeholder="예: 02-1234-5678" required />
+        </div>
+        <div class="form-group">
+          <label>이메일</label>
+          <input type="email" name="email" placeholder="예: contact@company.com" />
+        </div>
+      </div>
+
+      <!-- 광고 정보 -->
+      <h3 style="color: #333; margin: 25px 0 15px 0; font-size: 16px">
+        📰 광고 정보
+      </h3>
+
+      <div class="row">
+        <div class="form-group">
+          <label>광고 유형</label>
+          <select name="adType">
+            <option value="">선택하세요</option>
+            <option value="잡지 지면 광고">잡지 지면 광고</option>
+            <option value="온라인 광고">온라인 광고</option>
+            <option value="양쪽 다">양쪽 다 (지면 + 온라인)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>광고 크기</label>
+          <select name="size">
+            <option value="">선택하세요</option>
+            <option value="FC">FC (Full Color)</option>
+            <option value="1/2">1/2 Page</option>
+            <option value="1/4">1/4 Page</option>
+            <option value="옐로페이지">옐로페이지</option>
+            <option value="온라인 포함">온라인 포함</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 추가 정보 -->
+      <h3 style="color: #333; margin: 25px 0 15px 0; font-size: 16px">
+        💬 기타 정보
+      </h3>
+
+      <div class="form-group">
+        <label>예상 시작 시기</label>
+        <input type="date" name="startDate" />
+        <div class="info-box">광고를 시작하고 싶은 시기를 선택해주세요</div>
+      </div>
+
+      <div class="form-group">
+        <label>문의 내용</label>
+        <textarea name="remark" placeholder="광고 문의사항을 자유롭게 적어주세요. 예산, 기간, 컨셉 등"></textarea>
+      </div>
+
+      <!-- 개인정보 동의 -->
+      <div style="
+            background: #f9f9f9;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+          ">
+        <input type="checkbox" id="consent" name="consent" required />
+        <label for="consent" style="display: inline; margin: 0; font-weight: normal">
+          개인정보 수집에 동의합니다. (연락처는 영업 문의 회신용으로만
+          사용됩니다)
+        </label>
+      </div>
+
+      <!-- 버튼 -->
+      <div class="button-group">
+        <button type="submit" class="btn-submit">
+          <span id="submitText">문의 제출</span><span class="loading" id="loadingDots" style="display: none"></span>
+        </button>
+        <button type="reset" class="btn-reset">초기화</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // ⚠️ 이 부분을 업데이트하세요!
+    // Google Apps Script 웹 앱의 배포 URL을 여기에 입력하세요
+    const GOOGLE_APPS_SCRIPT_URL =
+      "https://script.google.com/macros/s/AKfycbw1rd5SbMDMSxDYbCarcuJ5chVgcKKQgEvyJfXR0xEpYxs-tP93ZJigYoB6XgDzfoOpGQ/exec";
+
+    const form = document.getElementById("inquiryForm");
+    const successMessage = document.getElementById("successMessage");
+    const errorMessage = document.getElementById("errorMessage");
+    const errorText = document.getElementById("errorText");
+    const submitBtn = form.querySelector(".btn-submit");
+    const submitText = document.getElementById("submitText");
+    const loadingDots = document.getElementById("loadingDots");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      // 개인정보 동의 확인
+      if (!document.getElementById("consent").checked) {
+        showError("개인정보 수집에 동의해주세요");
+        return;
+      }
+
+      // 로딩 상태
+      submitBtn.disabled = true;
+      submitText.textContent = "제출 중";
+      loadingDots.style.display = "inline-block";
+      successMessage.classList.remove("show");
+      errorMessage.classList.remove("show");
+
+      try {
+        // 폼 데이터 수집
+        const formData = new FormData(form);
+        const data = {
+          date: new Date().toISOString().split("T")[0], // 오늘 날짜
+          customerName: formData.get("customerName"),
+          contact: formData.get("contact"),
+          position: formData.get("position"),
+          phone: formData.get("phone"),
+          email: formData.get("email"),
+          adType: formData.get("adType"),
+          size: formData.get("size"),
+          startDate: formData.get("startDate"),
+          remark: formData.get("remark"),
+          source: "ONLINE", // 온라인 폼 표시
+        };
+
+        // Google Apps Script로 전송
+        const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        });
+
+        // 성공 메시지 표시
+        showSuccess();
+        form.reset();
+      } catch (error) {
+        console.error("에러:", error);
+        showError("문의 제출 중 오류가 발생했습니다. 다시 시도해주세요.");
+      } finally {
+        // 로딩 상태 해제
+        submitBtn.disabled = false;
+        submitText.textContent = "문의 제출";
+        loadingDots.style.display = "none";
+      }
+    });
+
+    function showSuccess() {
+      successMessage.classList.add("show");
+      errorMessage.classList.remove("show");
+      setTimeout(() => {
+        successMessage.classList.remove("show");
+      }, 5000);
+    }
+
+    function showError(message) {
+      errorText.textContent = message;
+      errorMessage.classList.add("show");
+      successMessage.classList.remove("show");
+    }
+  </script>
+</body>
+
+</html>

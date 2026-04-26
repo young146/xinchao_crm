@@ -1,0 +1,468 @@
+<style>
+    /* === 🚀 1. 독립 페이지 접속 시 동작하는 스타일 (앱, 카톡용) === */
+    body.is-standalone-page {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+            "Ubuntu", "Cantarell", sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        margin: 0;
+    }
+
+
+    /* === 📦 2. 워드프레스 포함 시 사용할 스코핑 형태 (Form Only) === */
+    /* 
+    여기서부터는 워드프레스 안에서도 다른 요소와 충돌하지 않도록
+    모두 .ad-inquiry-wrapper 아래로 클래스를 제한(Scoping)하여 지정합니다.
+  */
+    .ad-inquiry-wrapper * {
+        box-sizing: border-box;
+    }
+
+    .ad-inquiry-wrapper {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 600px;
+        width: 100%;
+        padding: 40px;
+        margin: 0 auto;
+        /* 워드프레스 본문 중앙 정렬용 */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+        text-align: left;
+        /* 워드프레스 테마의 중앙 정렬을 덮어씀 */
+        line-height: normal;
+    }
+
+    .ad-inquiry-wrapper .header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .ad-inquiry-wrapper .header h1 {
+        color: #d32f2f;
+        font-size: 28px;
+        margin-bottom: 10px;
+        margin-top: 0;
+        line-height: 1.2;
+    }
+
+    .ad-inquiry-wrapper .header p {
+        color: #666;
+        font-size: 14px;
+        margin: 0;
+    }
+
+    .ad-inquiry-wrapper .form-group {
+        margin-bottom: 20px;
+    }
+
+    .ad-inquiry-wrapper label {
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .ad-inquiry-wrapper label .required {
+        color: #f44336;
+    }
+
+    .ad-inquiry-wrapper input[type="text"],
+    .ad-inquiry-wrapper input[type="email"],
+    .ad-inquiry-wrapper input[type="tel"],
+    .ad-inquiry-wrapper input[type="date"],
+    .ad-inquiry-wrapper select,
+    .ad-inquiry-wrapper textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        font-family: inherit;
+        transition: border-color 0.3s;
+        background: #fff;
+        color: #333;
+        margin: 0;
+    }
+
+    .ad-inquiry-wrapper input[type="text"]:focus,
+    .ad-inquiry-wrapper input[type="email"]:focus,
+    .ad-inquiry-wrapper input[type="tel"]:focus,
+    .ad-inquiry-wrapper input[type="date"]:focus,
+    .ad-inquiry-wrapper select:focus,
+    .ad-inquiry-wrapper textarea:focus {
+        outline: none;
+        border-color: #d32f2f;
+        box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1);
+    }
+
+    .ad-inquiry-wrapper textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .ad-inquiry-wrapper .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .ad-inquiry-wrapper .row.full {
+        grid-template-columns: 1fr;
+    }
+
+    .ad-inquiry-wrapper .button-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 30px;
+    }
+
+    .ad-inquiry-wrapper button {
+        flex: 1;
+        padding: 14px 24px;
+        font-size: 16px;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s;
+        margin: 0;
+        line-height: normal;
+    }
+
+    .ad-inquiry-wrapper .btn-submit {
+        background: #d32f2f;
+        color: white;
+    }
+
+    .ad-inquiry-wrapper .btn-submit:hover:not(:disabled) {
+        background: #b71c1c;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(211, 47, 47, 0.3);
+    }
+
+    .ad-inquiry-wrapper .btn-submit:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .ad-inquiry-wrapper .btn-reset {
+        background: #f5f5f5;
+        color: #333;
+    }
+
+    .ad-inquiry-wrapper .btn-reset:hover {
+        background: #e0e0e0;
+    }
+
+    .ad-inquiry-wrapper .success-message {
+        display: none;
+        background: #e8f5e9;
+        border-left: 4px solid #4caf50;
+        color: #2e7d32;
+        padding: 16px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+    }
+
+    .ad-inquiry-wrapper .success-message.show {
+        display: block;
+    }
+
+    .ad-inquiry-wrapper .error-message {
+        display: none;
+        background: #ffebee;
+        border-left: 4px solid #f44336;
+        color: #c62828;
+        padding: 16px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+    }
+
+    .ad-inquiry-wrapper .error-message.show {
+        display: block;
+    }
+
+    .ad-inquiry-wrapper .info-box {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        color: #1565c0;
+        margin-top: 8px;
+    }
+
+    .ad-inquiry-wrapper .loading {
+        display: inline-block;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: white;
+        margin-left: 4px;
+        animation: dots 1.4s infinite;
+    }
+
+    @keyframes dots {
+
+        0%,
+        20%,
+        80%,
+        100% {
+            opacity: 0.5;
+        }
+
+        50% {
+            opacity: 1;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .ad-inquiry-wrapper {
+            padding: 24px;
+        }
+
+        .ad-inquiry-wrapper .header h1 {
+            font-size: 24px;
+        }
+
+        .ad-inquiry-wrapper .row {
+            grid-template-columns: 1fr;
+        }
+
+        .ad-inquiry-wrapper .button-group {
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="ad-inquiry-wrapper">
+    <div class="header">
+        <h1>📢 광고 문의</h1>
+        <p>Xinchao Vietnam 매거진 광고 문의</p>
+    </div>
+
+    <div id="successMessage" class="success-message">
+        <strong>✅ 문의가 접수되었습니다!</strong><br />
+        빠른 시간 내에 담당자가 연락드리겠습니다.
+    </div>
+
+    <div id="errorMessage" class="error-message">
+        <strong>⚠️ 오류가 발생했습니다!</strong><br />
+        <span id="errorText"></span>
+    </div>
+
+    <form id="inquiryForm">
+        <!-- 회사 정보 -->
+        <h3 style="color: #333; margin: 25px 0 15px 0; font-size: 16px">
+            📋 회사 정보
+        </h3>
+
+        <div class="form-group">
+            <label>회사명 <span class="required">*</span></label>
+            <input type="text" name="customerName" required placeholder="예: 삼성전자" />
+            <div class="info-box">회사 공식명으로 입력해주세요</div>
+        </div>
+
+        <div class="row">
+            <div class="form-group">
+                <label>담당자명 <span class="required">*</span></label>
+                <input type="text" name="contact" placeholder="예: 박영수" required />
+            </div>
+            <div class="form-group">
+                <label>직책</label>
+                <input type="text" name="position" placeholder="예: 마케팅팀장" />
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="form-group">
+                <label>전화 <span class="required">*</span></label>
+                <input type="tel" name="phone" placeholder="예: 02-1234-5678" required />
+            </div>
+            <div class="form-group">
+                <label>이메일</label>
+                <input type="email" name="email" placeholder="예: contact@company.com" />
+            </div>
+        </div>
+
+        <!-- 광고 정보 -->
+        <h3 style="color: #333; margin: 25px 0 15px 0; font-size: 16px">
+            📰 광고 정보
+        </h3>
+
+        <div class="row">
+            <div class="form-group">
+                <label>광고 유형</label>
+                <select name="adType">
+                    <option value="">선택하세요</option>
+                    <option value="잡지 지면 광고">잡지 지면 광고</option>
+                    <option value="온라인 광고">온라인 광고</option>
+                    <option value="양쪽 다">양쪽 다 (지면 + 온라인)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>광고 크기</label>
+                <select name="size">
+                    <option value="">선택하세요</option>
+                    <option value="FC">FC (Full Color)</option>
+                    <option value="1/2">1/2 Page</option>
+                    <option value="1/4">1/4 Page</option>
+                    <option value="옐로페이지">옐로페이지</option>
+                    <option value="온라인 포함">온라인 포함</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 추가 정보 -->
+        <h3 style="color: #333; margin: 25px 0 15px 0; font-size: 16px">
+            💬 기타 정보
+        </h3>
+
+        <div class="form-group">
+            <label>예상 시작 시기</label>
+            <input type="date" name="startDate" />
+            <div class="info-box">광고를 시작하고 싶은 시기를 선택해주세요</div>
+        </div>
+
+        <div class="form-group">
+            <label>문의 내용</label>
+            <textarea name="remark" placeholder="광고 문의사항을 자유롭게 적어주세요. 예산, 기간, 컨셉 등"></textarea>
+        </div>
+
+        <!-- 개인정보 동의 -->
+        <div style="
+          background: #f9f9f9;
+          padding: 12px;
+          border-radius: 6px;
+          margin: 20px 0;
+          font-size: 13px;
+          color: #666;
+          line-height: 1.6;
+        ">
+            <input type="checkbox" id="consent" name="consent" required />
+            <label for="consent" style="display: inline; margin: 0; font-weight: normal">
+                개인정보 수집에 동의합니다. (연락처는 영업 문의 회신용으로만
+                사용됩니다)
+            </label>
+        </div>
+
+        <!-- 버튼 -->
+        <div class="button-group">
+            <button type="submit" class="btn-submit">
+                <span id="submitText">문의 제출</span><span class="loading" id="loadingDots" style="display: none"></span>
+            </button>
+            <button type="reset" class="btn-reset">초기화</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    // 🌍 독립 창 접속 확인 (워드프레스 안이 아닐 경우)
+    // iframe 등이 아닌 최상위에서 직접 링크로 접속 시 body에 클래스를 주어 
+    // 보라색 그라데이션 전체화면을 켭니다. 
+    // 워드프레스에 내장되었을 때는 이 조건이 `false`가 되어 사이트 스타일을 망치지 않습니다.
+    if (window.self === window.top && !document.body.classList.contains('page-template')) {
+        // 좀 더 명확하게: 바디 태그에 워드프레스 특성 클래스가 없다면
+        if (!document.body.classList.toString().match(/wp-|page-/)) {
+            document.body.classList.add('is-standalone-page');
+        }
+    }
+
+    // ⚠️ Google Apps Script 웹 앱 배포 URL
+    const GOOGLE_APPS_SCRIPT_URL =
+        "https://script.google.com/macros/s/AKfycbw1rd5SbMDMSxDYbCarcuJ5chVgcKKQgEvyJfXR0xEpYxs-tP93ZJigYoB6XgDzfoOpGQ/exec";
+
+    const form = document.getElementById("inquiryForm");
+    const successMessage = document.getElementById("successMessage");
+    const errorMessage = document.getElementById("errorMessage");
+    const errorText = document.getElementById("errorText");
+    const submitBtn = form.querySelector(".btn-submit");
+    const submitText = document.getElementById("submitText");
+    const loadingDots = document.getElementById("loadingDots");
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        // 개인정보 동의 확인
+        if (!document.getElementById("consent").checked) {
+            showError("개인정보 수집에 동의해주세요");
+            return;
+        }
+
+        // 로딩 상태
+        submitBtn.disabled = true;
+        submitText.textContent = "제출 중";
+        loadingDots.style.display = "inline-block";
+        successMessage.classList.remove("show");
+        errorMessage.classList.remove("show");
+
+        try {
+            // 폼 데이터 수집
+            const formData = new FormData(form);
+            const data = {
+                date: new Date().toISOString().split("T")[0], // 오늘 날짜
+                customerName: formData.get("customerName"),
+                contact: formData.get("contact"),
+                position: formData.get("position"),
+                phone: formData.get("phone"),
+                email: formData.get("email"),
+                adType: formData.get("adType"),
+                size: formData.get("size"),
+                startDate: formData.get("startDate"),
+                remark: window.location.hostname.includes("chaovietnam")
+                    ? "[웹사이트 폼] " + (formData.get("remark") || "")
+                    : formData.get("remark"),
+                source: "ONLINE", // 기존 영업 파이프라인(새로운 문의) 연동을 위해 "ONLINE" 유지
+            };
+
+            // Google Apps Script로 전송 (no-cors라 응답 읽기 불가 → fire-and-forget)
+            fetch(GOOGLE_APPS_SCRIPT_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(data),
+            }).catch(() => { }); // 에러 무시 (no-cors opaque response)
+
+            // 즉시 성공 처리
+            showSuccess();
+            form.reset();
+        } catch (error) {
+            console.error("에러:", error);
+            showError("문의 제출 중 오류가 발생했습니다. 다시 시도해주세요.");
+        } finally {
+            // 로딩 상태 해제
+            submitBtn.disabled = false;
+            submitText.textContent = "문의 제출";
+            loadingDots.style.display = "none";
+        }
+    });
+
+    function showSuccess() {
+        successMessage.classList.add("show");
+        errorMessage.classList.remove("show");
+
+        // ⬆️ 성공 메시지로 스크롤
+        successMessage.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        // ⏱️ 5초 후 메시지 숨김
+        setTimeout(() => {
+            successMessage.classList.remove("show");
+        }, 5000);
+    }
+
+    function showError(message) {
+        errorText.textContent = message;
+        errorMessage.classList.add("show");
+        successMessage.classList.remove("show");
+    }
+</script>

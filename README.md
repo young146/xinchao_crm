@@ -1,3 +1,73 @@
+# 씬짜오베트남 CRM
+
+## 챗봇 API (`/api/chat`)
+
+씬짜오베트남 광고 안내 AI 챗봇 백엔드 (Vercel Serverless Function).  
+모델: `gpt-4o-mini` | 언어: 한국어
+
+### 환경변수 설정
+
+**로컬 개발**
+
+프로젝트 루트에 `.env.local` 파일 생성 후 아래 내용 추가:
+
+```
+OPENAI_API_KEY=sk-...your-openai-api-key-here...
+```
+
+> `.env.local.example` 파일을 복사해서 사용하세요.
+
+**Vercel 배포**
+
+Vercel Dashboard → [프로젝트] → Settings → Environment Variables  
+`OPENAI_API_KEY` = `sk-...your-key...` (Production / Preview / Development 모두 체크)
+
+---
+
+### 로컬 테스트 방법
+
+```bash
+# 1. 의존성 설치
+npm install
+
+# 2. Vercel CLI 설치 (최초 1회)
+npm install -g vercel
+
+# 3. 로컬 개발 서버 실행 (React + Serverless Function 동시)
+vercel dev
+```
+
+**curl 테스트 예시:**
+
+```bash
+# 일반 질문
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"어떤 패키지가 있나요?"}]}'
+
+# 추천 포함 응답 확인
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"레스토랑인데 예산 1000달러 정도로 6개월 광고하고 싶어요"}]}'
+```
+
+**응답 예시:**
+
+```json
+{
+  "reply": "레스토랑이시군요! 예산과 기간을 고려하면 ★ 통합 패키지 B를 추천드립니다...",
+  "recommendation": {
+    "packageName": "통합 패키지 B",
+    "months": 6,
+    "addons": []
+  }
+}
+```
+
+> `recommendation` 필드는 챗봇이 패키지를 확정 추천할 때만 포함됩니다.
+
+---
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

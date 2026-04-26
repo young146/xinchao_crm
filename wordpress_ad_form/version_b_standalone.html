@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>씬짜오베트남 광고 신청</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --brand: #d32f2f;
+  --brand-dark: #b71c1c;
+  --brand-light: #fff5f5;
+  --brand-border: rgba(211,47,47,0.25);
+  --text: #000000;
+  --text-sub: #1a1a1a;
+  --text-muted: #444444;
+  --bg: #ffffff;
+  --bg-2: #f8f7f5;
+  --bg-3: #f0efec;
+  --border: #d0d0d0;
+  --border-2: #aaaaaa;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --font: 'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+body {
+  font-family: var(--font);
+  background: var(--bg-2);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 32px 16px 80px;
+  font-size: 17px;
+}
+.wrap {
+  max-width: 660px;
+  margin: 0 auto;
+}
+
+/* 헤더 */
+.page-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.page-header .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.page-header .logo-mark {
+  width: 40px; height: 40px;
+  background: var(--brand);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 12px; font-weight: 700;
+}
+.page-header .logo-name { font-size: 17px; font-weight: 700; color: var(--text); }
+.page-header h1 { font-size: 32px; font-weight: 900; color: #000000; margin-bottom: 8px; }
+.page-header p { font-size: 17px; color: #333333; font-weight: 500; }
+
+/* 스텝 바 */
+.step-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 28px;
+}
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+}
+.step-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: calc(50% + 16px);
+  top: 14px;
+  width: calc(100% - 8px);
+  height: 1px;
+  background: var(--border);
+  z-index: 0;
+}
+.step-item.done:not(:last-child)::after { background: var(--brand); }
+.step-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  position: relative; z-index: 1;
+  transition: all 0.2s;
+}
+.step-item.active .step-dot { border-color: var(--brand); background: var(--brand); color: white; }
+.step-item.done .step-dot { border-color: var(--brand); background: var(--brand); color: white; }
+.step-label { font-size: 13px; font-weight: 600; color: #444; white-space: nowrap; }
+.step-item.active .step-label { color: var(--brand); font-weight: 800; }
+.step-item.done .step-label { color: var(--brand); }
+.step-gap { width: 40px; height: 1px; background: var(--border); margin-bottom: 18px; flex-shrink: 0; }
+.step-gap.done { background: var(--brand); }
+
+/* 카드 */
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-size: 19px; font-weight: 800;
+  color: #000000;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #222;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title span { font-size: 15px; }
+
+/* 폼 요소 */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-full { grid-column: 1 / -1; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-label { font-size: 16px; font-weight: 700; color: #000000; margin-bottom: 2px; }
+.form-label .req { color: var(--brand); margin-left: 2px; }
+input[type=text], input[type=email], input[type=tel], input[type=date], select, textarea {
+  font-family: var(--font); font-size: 16px;
+  background: var(--bg-2); border: 2px solid var(--border);
+  border-radius: var(--radius); padding: 13px 15px;
+  color: #000000; outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--brand); background: var(--bg);
+  box-shadow: 0 0 0 3px rgba(211,47,47,0.08);
+}
+textarea { resize: vertical; min-height: 80px; }
+.form-hint { font-size: 14px; color: #555555; margin-top: 5px; }
+
+/* 패키지 카드 */
+.pkg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.pkg-card {
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg);
+  position: relative;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.pkg-card:hover {
+  border-color: var(--brand);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(211,47,47,0.12);
+}
+.pkg-card.sel {
+  border-color: var(--brand);
+  background: var(--brand-light);
+  box-shadow: 0 8px 28px rgba(211,47,47,0.18);
+  transform: translateY(-2px);
+}
+.pkg-card.sel::before {
+  content: '✓ 선택됨';
+  position: absolute; top: 12px; left: 16px;
+  background: var(--brand); color: white;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px;
+  letter-spacing: 0.3px;
+}
+.pkg-best {
+  position: absolute; top: 0; right: 0;
+  background: linear-gradient(135deg, #ff6b35, var(--brand));
+  color: white;
+  font-size: 11px; font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 0 14px 0 12px;
+  letter-spacing: 0.5px;
+}
+.pkg-tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 700;
+  color: var(--brand);
+  background: var(--brand-light);
+  border: 1px solid var(--brand-border);
+  padding: 3px 10px; border-radius: 20px;
+  margin-bottom: 12px;
+  letter-spacing: 0.3px;
+}
+.pkg-name {
+  font-size: 20px; font-weight: 800;
+  color: #000000; margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+.pkg-price {
+  font-size: 32px; font-weight: 900;
+  color: var(--brand); line-height: 1;
+  margin-bottom: 14px;
+  letter-spacing: -1px;
+}
+.pkg-price small {
+  font-size: 14px; font-weight: 500;
+  color: var(--text-muted); letter-spacing: 0;
+}
+.pkg-divider {
+  height: 1px; background: var(--border);
+  margin: 0 0 12px;
+}
+.pkg-desc {
+  font-size: 15px; color: #111111;
+  line-height: 1.8; font-weight: 500;
+}
+.pkg-desc li {
+  list-style: none;
+  padding: 3px 0;
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.pkg-desc li::before {
+  content: '·';
+  color: var(--brand); font-weight: 900; font-size: 18px;
+  flex-shrink: 0; margin-top: 1px;
+}
+
+/* 추가옵션 */
+.addon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.addon-item {
+  border: 2px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  transition: all 0.15s; background: var(--bg); user-select: none;
+}
+.addon-item:hover { border-color: var(--brand); }
+.addon-item.sel { border-color: var(--brand); background: var(--brand-light); }
+.addon-chk {
+  width: 16px; height: 16px; border: 1.5px solid var(--border-2);
+  border-radius: 4px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.addon-item.sel .addon-chk { background: var(--brand); border-color: var(--brand); }
+.addon-item.sel .addon-chk::after {
+  content: ''; display: block; width: 8px; height: 6px;
+  border-left: 2px solid white; border-bottom: 2px solid white;
+  transform: rotate(-45deg) translateY(-1px);
+}
+.addon-label { font-size: 15px; color: #000000; flex: 1; font-weight: 600; }
+.addon-price { font-size: 15px; color: var(--brand); font-weight: 800; white-space: nowrap; }
+
+/* 기간 버튼 */
+.dur-row { display: flex; gap: 7px; }
+.dur-btn {
+  flex: 1; padding: 16px 8px; border: 2px solid var(--border);
+  border-radius: var(--radius); background: var(--bg);
+  font-family: var(--font); font-size: 16px; font-weight: 700; color: #000000;
+  cursor: pointer; text-align: center; line-height: 1.4; transition: all 0.15s;
+}
+.dur-btn:hover { border-color: var(--brand); }
+.dur-btn.sel { border-color: var(--brand); background: var(--brand-light); font-weight: 700; color: var(--brand); }
+.dur-disc { display: block; font-size: 13px; color: var(--brand); font-weight: 800; margin-top: 3px; }
+
+/* 견적 박스 */
+.estimate-box {
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px 18px;
+  display: none;
+}
+.estimate-box.show { display: block; }
+.est-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; font-size: 16px; color: #111111; font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+.est-row:last-of-type { border-bottom: none; }
+.est-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 12px 0 0; margin-top: 4px; border-top: 2px solid var(--border-2);
+}
+.est-total-label { font-size: 18px; font-weight: 800; color: #000000; }
+.est-total-val { font-size: 34px; font-weight: 900; color: var(--brand); }
+.disc-badge {
+  font-size: 10px; background: var(--brand-light); color: var(--brand);
+  padding: 2px 7px; border-radius: 4px; font-weight: 700; margin-left: 5px;
+}
+
+/* 파일 업로드 */
+.upload-zone {
+  border: 2px dashed var(--border-2); border-radius: var(--radius-lg);
+  padding: 24px 16px; text-align: center; cursor: pointer;
+  transition: all 0.15s; background: var(--bg-2);
+}
+.upload-zone:hover, .upload-zone.drag { border-color: var(--brand); background: var(--brand-light); }
+.upload-icon { font-size: 28px; margin-bottom: 8px; }
+.upload-text { font-size: 13px; color: var(--text-sub); margin-bottom: 4px; }
+.upload-hint { font-size: 11px; color: var(--text-muted); }
+.upload-input { display: none; }
+.file-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.file-item {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px; font-size: 12px;
+}
+.file-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-size { color: var(--text-muted); white-space: nowrap; }
+.file-del {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bg-3); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 12px; flex-shrink: 0;
+  transition: background 0.15s;
+}
+.file-del:hover { background: #fde; color: var(--brand); }
+
+/* 견적서 확인 페이지 */
+.quote-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow);
+}
+.quote-header {
+  background: var(--brand); color: white;
+  padding: 20px 24px; display: flex; justify-content: space-between; align-items: flex-start;
+}
+.quote-header h2 { font-size: 18px; font-weight: 700; margin-bottom: 3px; }
+.quote-header p { font-size: 12px; opacity: 0.85; }
+.quote-header .quote-no { font-size: 13px; text-align: right; opacity: 0.9; }
+.quote-body { padding: 20px 24px; }
+.quote-section { margin-bottom: 20px; }
+.quote-section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--text-muted);
+  margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.quote-row {
+  display: flex; justify-content: space-between;
+  padding: 5px 0; font-size: 13px; border-bottom: 1px solid #f5f5f5;
+}
+.quote-row:last-child { border-bottom: none; }
+.quote-row .ql { color: var(--text-muted); }
+.quote-row .qr { font-weight: 600; color: var(--text); text-align: right; }
+.quote-total-box {
+  background: var(--brand-light); border: 1px solid var(--brand-border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 16px;
+}
+.quote-total-box .qt-label { font-size: 14px; font-weight: 700; color: var(--brand); }
+.quote-total-box .qt-val { font-size: 24px; font-weight: 800; color: var(--brand); }
+.quote-notice {
+  background: var(--bg-2); border-left: 3px solid var(--brand);
+  padding: 10px 14px; font-size: 12px; color: var(--text-sub);
+  margin-top: 14px; border-radius: 0 var(--radius) var(--radius) 0;
+  line-height: 1.6;
+}
+
+/* 세무 정보 */
+.tax-toggle {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; background: var(--bg-2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; margin-bottom: 14px; user-select: none;
+}
+.tax-toggle input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; }
+.tax-toggle label { font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+.tax-toggle span { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+.tax-fields { display: none; }
+.tax-fields.show { display: block; }
+
+/* 동의 */
+.consent-box {
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 13px 14px;
+  font-size: 12px; color: var(--text-sub); line-height: 1.6;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.consent-box input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--brand); margin-top: 1px; flex-shrink: 0; }
+
+/* 버튼 */
+.btn-row { display: flex; gap: 10px; margin-top: 20px; }
+.btn-back {
+  padding: 13px 20px; border: 1.5px solid var(--border-2);
+  border-radius: var(--radius); background: var(--bg);
+  font-family: var(--font); font-size: 14px; color: var(--text);
+  cursor: pointer; transition: background 0.15s; white-space: nowrap;
+}
+.btn-back:hover { background: var(--bg-2); }
+.btn-next {
+  flex: 1; padding: 18px; background: var(--brand); border: none;
+  border-radius: var(--radius); font-family: var(--font);
+  font-size: 18px; font-weight: 800; color: white;
+  cursor: pointer; transition: background 0.15s; letter-spacing: -0.3px;
+}
+.btn-next:hover { background: var(--brand-dark); }
+.btn-next:disabled { background: var(--border-2); cursor: default; }
+
+/* 완료 화면 */
+.done-wrap {
+  text-align: center; padding: 48px 20px;
+}
+.done-icon {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: #e8f5e9; margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+}
+.done-title { font-size: 28px; font-weight: 900; color: #000000; margin-bottom: 12px; }
+.done-sub { font-size: 17px; color: #222222; line-height: 1.8; font-weight: 500; }
+.done-ref {
+  display: inline-block; background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 20px;
+  font-size: 13px; font-weight: 700; color: var(--brand); margin: 16px 0;
+  letter-spacing: 1px;
+}
+
+.hidden { display: none !important; }
+
+@media (max-width: 540px) {
+  .pkg-grid { grid-template-columns: 1fr 1fr; }
+  .addon-grid { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .form-full { grid-column: auto; }
+  .dur-row { flex-wrap: wrap; }
+  .dur-btn { min-width: calc(33% - 6px); }
+  .step-label { font-size: 9px; }
+  .card { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 헤더 -->
+  <div class="page-header">
+    <div class="logo">
+      <div class="logo-mark">XCV</div>
+      <div class="logo-name">씬짜오베트남</div>
+    </div>
+    <h1>광고 신청</h1>
+    <p>신청 후 담당자 검토 및 확인 연락을 드립니다</p>
+  </div>
+
+  <!-- 스텝 바 -->
+  <div class="step-bar" id="stepBar">
+    <div class="step-item active" id="si1">
+      <div class="step-dot">1</div>
+      <div class="step-label">기본 정보</div>
+    </div>
+    <div class="step-gap" id="sg1"></div>
+    <div class="step-item" id="si2">
+      <div class="step-dot">2</div>
+      <div class="step-label">광고 선택</div>
+    </div>
+    <div class="step-gap" id="sg2"></div>
+    <div class="step-item" id="si3">
+      <div class="step-dot">3</div>
+      <div class="step-label">견적 확인</div>
+    </div>
+    <div class="step-gap" id="sg3"></div>
+    <div class="step-item" id="si4">
+      <div class="step-dot">4</div>
+      <div class="step-label">세무·제출</div>
+    </div>
+  </div>
+
+  <!-- ===== STEP 1: 기본 정보 ===== -->
+  <div id="step1">
+    <div class="card">
+      <div class="card-title"><span>&#x1f3e2;</span> 회사 정보</div>
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label class="form-label">회사명 <span class="req">*</span></label>
+          <input type="text" id="customerName" placeholder="회사 공식명으로 입력해주세요" oninput="chkS1()" onkeyup="chkS1()"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">담당자명 <span class="req">*</span></label>
+          <input type="text" id="contact" placeholder="예: 박영수" oninput="chkS1()" onkeyup="chkS1()"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">직책</label>
+          <input type="text" id="position" placeholder="예: 마케팅팀장"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">전화 <span class="req">*</span></label>
+          <input type="tel" id="phone" placeholder="예: 090-1234-5678" oninput="chkS1()" onkeyup="chkS1()"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">이메일</label>
+          <input type="email" id="email" placeholder="예: contact@company.com"/>
+        </div>
+      </div>
+    </div>
+    <div id="s1ErrMsg" style="display:none;background:#fff0ee;border-left:3px solid #d32f2f;padding:10px 14px;font-size:13px;color:#b33;border-radius:0 8px 8px 0;margin-bottom:10px;"></div>
+    <div class="btn-row">
+      <button class="btn-next" id="btnS1" onclick="xcvGoS2()">다음 — 광고 선택 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 2: 광고 선택 ===== -->
+  <div id="step2" class="hidden">
+    <div class="card">
+      <div class="card-title"><span>&#x1f4e6;</span> 패키지 선택 <span style="color:var(--brand);font-size:11px;margin-left:4px;">*</span></div>
+      <div class="pkg-grid">
+
+        <div class="pkg-card" data-price="250" data-name="디지털 스타터" data-adtype="디지털 스타터" onclick="selPkg(this)">
+          <div class="pkg-tag">디지털 전용</div>
+          <div class="pkg-name">디지털 스타터</div>
+          <div class="pkg-price">$250 <small>/ 월</small></div>
+          <div class="pkg-divider"></div>
+          <ul class="pkg-desc">
+            <li>이메일 홍보카드 월 4회 발송</li>
+            <li>웹사이트 인너배너 1개</li>
+            <li>4,000명 직접 도달</li>
+          </ul>
+        </div>
+
+        <div class="pkg-card" data-price="350" data-name="디지털 프리미엄" data-adtype="디지털 프리미엄" onclick="selPkg(this)">
+          <div class="pkg-tag">디지털 전용</div>
+          <div class="pkg-name">디지털 프리미엄</div>
+          <div class="pkg-price">$350 <small>/ 월</small></div>
+          <div class="pkg-divider"></div>
+          <ul class="pkg-desc">
+            <li>이메일 홍보카드 월 4회</li>
+            <li>웹사이트 인너배너</li>
+            <li>앱 인너배너 + 앱 하단배너</li>
+          </ul>
+        </div>
+
+        <div class="pkg-card" data-price="500" data-name="디지털 베스트" data-adtype="디지털 베스트" onclick="selPkg(this)">
+          <div class="pkg-tag">디지털 전용</div>
+          <div class="pkg-name">디지털 베스트</div>
+          <div class="pkg-price">$500 <small>/ 월</small></div>
+          <div class="pkg-divider"></div>
+          <ul class="pkg-desc">
+            <li>이메일 홍보카드 월 4회</li>
+            <li>웹 헤드배너 + 하단배너</li>
+            <li>앱 헤더배너 + 하단배너</li>
+          </ul>
+        </div>
+
+        <div class="pkg-card" data-price="1050" data-name="통합 패키지 A" data-adtype="통합 패키지 A" onclick="selPkg(this)">
+          <div class="pkg-tag">잡지 + 디지털</div>
+          <div class="pkg-name">통합 패키지 A</div>
+          <div class="pkg-price">$1,050 <small>/ 월</small></div>
+          <div class="pkg-divider"></div>
+          <ul class="pkg-desc">
+            <li>잡지 전면 1페이지</li>
+            <li>디지털 스타터 포함</li>
+            <li>디지털 40% 할인 적용</li>
+          </ul>
+        </div>
+
+        <div class="pkg-card" data-price="1150" data-name="통합 패키지 B" data-adtype="통합 패키지 B" onclick="selPkg(this)">
+          <div class="pkg-best">베스트</div>
+          <div class="pkg-tag">잡지 + 디지털</div>
+          <div class="pkg-name">통합 패키지 B</div>
+          <div class="pkg-price">$1,150 <small>/ 월</small></div>
+          <div class="pkg-divider"></div>
+          <ul class="pkg-desc">
+            <li>잡지 전면 1페이지</li>
+            <li>디지털 프리미엄 포함</li>
+            <li>이웃사업 소개 카드 포함</li>
+          </ul>
+        </div>
+
+        <div class="pkg-card" data-price="1250" data-name="통합 패키지 C" data-adtype="통합 패키지 C" onclick="selPkg(this)">
+          <div class="pkg-tag">잡지 + 디지털</div>
+          <div class="pkg-name">통합 패키지 C</div>
+          <div class="pkg-price">$1,250 <small>/ 월</small></div>
+          <div class="pkg-divider"></div>
+          <ul class="pkg-desc">
+            <li>잡지 전면 1페이지</li>
+            <li>디지털 베스트 포함</li>
+            <li>이웃사업 소개 카드 포함</li>
+          </ul>
+        </div>
+
+        <div class="pkg-card" data-price="3000" data-name="프리미엄 올인원" data-adtype="프리미엄 올인원" onclick="selPkg(this)" style="grid-column: 1 / -1; background: linear-gradient(135deg, #fff5f5 0%, #fff 60%); border-color: #e0a0a0;">
+          <div class="pkg-tag" style="background:#d32f2f;color:white;border-color:#d32f2f;">최고급 패키지</div>
+          <div class="pkg-name" style="font-size:22px;">프리미엄 올인원</div>
+          <div class="pkg-price">$3,000 <small>/ 월</small></div>
+          <div class="pkg-divider"></div>
+          <ul class="pkg-desc" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px;">
+            <li>잡지 백커버 (후면 표지)</li>
+            <li>디지털 베스트 전체 포함</li>
+            <li>이웃사업 소개 카드 포함</li>
+            <li>최대 노출 · 최고 신뢰도</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>&#x2795;</span> 단품 추가 옵션 <span style="font-size:10px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">(선택)</span></div>
+      <div class="addon-grid">
+        <div class="addon-item" data-price="50" data-name="이메일 홍보카드 추가 1회" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">이메일 홍보카드 추가 1회</span>
+          <span class="addon-price">+$50</span>
+        </div>
+        <div class="addon-item" data-price="150" data-name="웹사이트 헤드 배너" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">웹사이트 헤드 배너</span>
+          <span class="addon-price">+$150/월</span>
+        </div>
+        <div class="addon-item" data-price="80" data-name="웹사이트 내부·푸터 배너" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">웹사이트 내부·푸터 배너</span>
+          <span class="addon-price">+$80/월</span>
+        </div>
+        <div class="addon-item" data-price="120" data-name="앱 헤드 배너" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">앱 헤드 배너</span>
+          <span class="addon-price">+$120/월</span>
+        </div>
+        <div class="addon-item" data-price="70" data-name="앱 내부·푸터 배너" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">앱 내부·푸터 배너</span>
+          <span class="addon-price">+$70/월</span>
+        </div>
+        <div class="addon-item" data-price="100" data-name="이웃사업 소개 카드" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">이웃사업 소개 카드</span>
+          <span class="addon-price">+$100</span>
+        </div>
+      </div>
+
+      <div style="font-size:15px;font-weight:800;color:#111;margin:20px 0 12px;padding-top:18px;border-top:2px solid #ddd;">잡지 단독 지면 광고 <span style="font-size:13px;font-weight:500;color:#555;">(월 2회 발행 기준)</span></div>
+      <div class="addon-grid">
+        <div class="addon-item" data-price="900" data-name="잡지 전면 ($900/월)" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">잡지 전면</span>
+          <span class="addon-price">$900/월</span>
+        </div>
+        <div class="addon-item" data-price="500" data-name="잡지 1/2면 ($500/월)" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">잡지 1/2면</span>
+          <span class="addon-price">$500/월</span>
+        </div>
+        <div class="addon-item" data-price="300" data-name="잡지 1/4면 ($300/월)" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">잡지 1/4면</span>
+          <span class="addon-price">$300/월</span>
+        </div>
+        <div class="addon-item" data-price="240" data-name="옐로페이지 1단 ($240)" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">옐로페이지 1단</span>
+          <span class="addon-price">$240</span>
+        </div>
+        <div class="addon-item" data-price="480" data-name="옐로페이지 2단 ($480)" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">옐로페이지 2단</span>
+          <span class="addon-price">$480</span>
+        </div>
+        <div class="addon-item" data-price="960" data-name="옐로페이지 4단 ($960)" onclick="togAddon(this)">
+          <div class="addon-chk"></div>
+          <span class="addon-label">옐로페이지 4단</span>
+          <span class="addon-price">$960</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>&#x1f4c5;</span> 집행 기간 <span style="color:var(--brand);font-size:11px;margin-left:4px;">*</span></div>
+      <div class="dur-row">
+        <button type="button" class="dur-btn" data-m="1" data-d="0" onclick="selDur(this)">1개월</button>
+        <button type="button" class="dur-btn" data-m="2" data-d="0" onclick="selDur(this)">2개월</button>
+        <button type="button" class="dur-btn" data-m="3" data-d="5" onclick="selDur(this)">3개월<span class="dur-disc">-5%</span></button>
+        <button type="button" class="dur-btn" data-m="6" data-d="10" onclick="selDur(this)">6개월<span class="dur-disc">-10%</span></button>
+        <button type="button" class="dur-btn" data-m="12" data-d="15" onclick="selDur(this)">12개월<span class="dur-disc">-15%</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>&#x1f4c5;</span> 예상 시작일</div>
+      <div class="form-group">
+        <input type="date" id="startDate"/>
+        <div class="form-hint">희망 게재 시작일을 선택해주세요 (확정은 담당자 확인 후)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>&#x1f4ce;</span> 광고 소재 파일 <span style="font-size:10px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">(선택 — 나중에 이메일로 보내도 됩니다)</span></div>
+      <!-- [버그수정] ondragover: ev.preventDefault() → event.preventDefault() -->
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="dropFiles(event)">
+        <div class="upload-icon">&#x1f4c1;</div>
+        <div class="upload-text">클릭하거나 파일을 드래그해서 올려주세요</div>
+        <div class="upload-hint">이미지(JPG·PNG·GIF) · 영상(MP4·MOV) · 문서(PDF·AI·PSD) · 최대 10MB/파일</div>
+      </div>
+      <input type="file" id="fileInput" class="upload-input" multiple
+             accept="image/*,video/*,.pdf,.ai,.psd,.eps,.zip"
+             onchange="addFiles(this.files)"/>
+      <div class="file-list" id="fileList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>&#x1f4ac;</span> 요청사항</div>
+      <div class="form-group">
+        <textarea id="remark" placeholder="광고 목적, 타깃 고객, 강조할 내용, 예산, 기타 요청사항 등 자유롭게 작성해주세요"></textarea>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goStep(1)">← 이전</button>
+      <button class="btn-next" id="btnS2" onclick="goStep(3)" disabled>견적 확인 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 3: 견적 확인 ===== -->
+  <div id="step3" class="hidden">
+    <div class="quote-card">
+      <div class="quote-header">
+        <div>
+          <h2>견적서</h2>
+          <p>씬짜오베트남 광고 신청</p>
+        </div>
+        <div class="quote-no" id="quoteNo"></div>
+      </div>
+      <div class="quote-body">
+        <div class="quote-section">
+          <div class="quote-section-title">신청자 정보</div>
+          <div class="quote-row"><span class="ql">회사명</span><span class="qr" id="q-company"></span></div>
+          <div class="quote-row"><span class="ql">담당자</span><span class="qr" id="q-contact"></span></div>
+          <div class="quote-row"><span class="ql">연락처</span><span class="qr" id="q-phone"></span></div>
+        </div>
+        <div class="quote-section">
+          <div class="quote-section-title">광고 내역</div>
+          <div id="q-items"></div>
+          <div class="quote-row"><span class="ql">집행 기간</span><span class="qr" id="q-term"></span></div>
+          <div class="quote-row"><span class="ql">예상 시작일</span><span class="qr" id="q-start"></span></div>
+        </div>
+        <div class="quote-total-box">
+          <span class="qt-label">최종 견적 금액</span>
+          <span class="qt-val" id="q-total"></span>
+        </div>
+        <div class="quote-notice">
+          ※ 본 견적은 참고용이며, 담당자 검토 후 최종 금액이 확정됩니다.<br />
+          ※ 광고 자리 및 디자인 확인 후 입금 안내를 드립니다.
+        </div>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn-back" onclick="goStep(2)">← 수정</button>
+      <button class="btn-next" onclick="goStep(4)">이 견적으로 신청 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 4: 세무 정보 + 제출 ===== -->
+  <div id="step4" class="hidden">
+
+    <div class="card">
+      <div class="card-title"><span>&#x1f3e2;</span> 광고주 회사 소개</div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">회사 소개 / 업종 / 주요 제품·서비스</label>
+        <textarea id="companyInfo" placeholder="예: 하노이 소재 한식 레스토랑, 15년 운영&#10;광고 타깃: 하노이 거주 한국 교민 및 주재원" style="min-height:100px;"></textarea>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">웹사이트</label>
+          <input type="text" id="companyWeb" placeholder="https://..."/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">SNS / 카카오채널</label>
+          <input type="text" id="companySns" placeholder="인스타그램, 페이스북, 카카오 등"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">사업장 주소</label>
+          <input type="text" id="companyAddr" placeholder="베트남 내 사업장 주소"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">광고 타깃 고객</label>
+          <input type="text" id="companyTarget" placeholder="예: 한인 교민, 주재원, 베트남 현지인 등"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>&#x1f9fe;</span> 세금계산서 발행 정보</div>
+      <div class="tax-toggle" onclick="togTax()">
+        <input type="checkbox" id="taxChk"/>
+        <label for="taxChk">세금계산서 발행을 원합니다</label>
+        <span>선택사항</span>
+      </div>
+      <div class="tax-fields" id="taxFields">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">사업자등록번호 <span class="req">*</span></label>
+            <input type="text" id="bizNo" placeholder="000-00-00000"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">상호 <span class="req">*</span></label>
+            <input type="text" id="bizName" placeholder="사업자 등록상 상호"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">대표자명 <span class="req">*</span></label>
+            <input type="text" id="bizCeo" placeholder="대표자 성명"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">업태 / 종목</label>
+            <input type="text" id="bizType" placeholder="예: 서비스업 / 광고"/>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">사업장 주소 <span class="req">*</span></label>
+            <input type="text" id="bizAddr" placeholder="사업자 등록상 주소"/>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">세금계산서 수신 이메일 <span class="req">*</span></label>
+            <input type="email" id="taxEmail" placeholder="계산서를 받을 이메일"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>&#x2705;</span> 최종 확인</div>
+      <div class="estimate-box show" id="finalEstimate"></div>
+      <div class="consent-box" style="margin-top:14px;">
+        <input type="checkbox" id="consent"/>
+        <span>개인정보 수집 및 이용에 동의합니다. 수집된 정보는 광고 문의 처리 목적으로만 사용됩니다.</span>
+      </div>
+    </div>
+
+    <div id="errMsg" class="hidden" style="background:#fff0ee;border-left:3px solid var(--brand);padding:10px 14px;font-size:13px;color:#b33;border-radius:0 var(--radius) var(--radius) 0;margin-bottom:10px;"></div>
+
+    <div class="btn-row">
+      <button class="btn-back" onclick="goStep(3)">← 이전</button>
+      <button class="btn-next" id="btnSubmit" onclick="submitForm()">광고 신청 제출 →</button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 5: 완료 ===== -->
+  <div id="step5" class="hidden">
+    <div class="card">
+      <div class="done-wrap">
+        <div class="done-icon">&#x2705;</div>
+        <div class="done-title">광고 신청이 접수되었습니다</div>
+        <div class="done-ref" id="doneRef"></div>
+        <div class="done-sub">
+          담당자가 신청 내용을 검토한 후<br />
+          <strong>1~2 영업일 내</strong>로 연락드립니다.<br /><br />
+          광고 자리 확인 및 디자인 제작 후<br />
+          최종 금액 확정 및 입금 안내를 드립니다.<br /><br />
+          기타 추가 문의사항이 있으시면<br />
+          <strong>info@chaovietnam.co.kr</strong> 로 보내주세요.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== 상태 =====
+var S = {
+  pkg: null, addons: [], months: null, discount: 0,
+  baseMonthly: 0, total: 0, files: []
+};
+
+// ===== GAS URL (기존 연결 그대로) =====
+var GAS_URL = "https://script.google.com/macros/s/AKfycbw1rd5SbMDMSxDYbCarcuJ5chVgcKKQgEvyJfXR0xEpYxs-tP93ZJigYoB6XgDzfoOpGQ/exec";
+
+// ===== STEP 이동 =====
+function goStep(n) {
+  [1,2,3,4,5].forEach(function(i){
+    document.getElementById('step'+i).classList.add('hidden');
+    var si = document.getElementById('si'+i);
+    if(si){ si.classList.remove('active','done'); }
+    var sg = document.getElementById('sg'+i);
+    if(sg){ sg.classList.remove('done'); }
+  });
+  document.getElementById('step'+n).classList.remove('hidden');
+  for(var i=1;i<n;i++){
+    var si = document.getElementById('si'+i);
+    if(si) si.classList.add('done');
+    var sg = document.getElementById('sg'+i);
+    if(sg) sg.classList.add('done');
+  }
+  var active = document.getElementById('si'+n);
+  if(active) active.classList.add('active');
+  if(n===3) renderQuote();
+  if(n===4) renderFinalEstimate();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ===== STEP 1 — 클릭 시 검증 =====
+function chkS1(){}
+function xcvGoS2(){
+  var name  = document.getElementById('customerName').value.trim();
+  var cont  = document.getElementById('contact').value.trim();
+  var phone = document.getElementById('phone').value.trim();
+  var errEl = document.getElementById('s1ErrMsg');
+  if(!name){
+    errEl.textContent='회사명을 입력해주세요.';
+    errEl.style.display='block';
+    document.getElementById('customerName').focus(); return;
+  }
+  if(!cont){
+    errEl.textContent='담당자명을 입력해주세요.';
+    errEl.style.display='block';
+    document.getElementById('contact').focus(); return;
+  }
+  if(!phone){
+    errEl.textContent='전화번호를 입력해주세요.';
+    errEl.style.display='block';
+    document.getElementById('phone').focus(); return;
+  }
+  errEl.style.display='none';
+  goStep(2);
+}
+
+// ===== STEP 2 =====
+function selPkg(el){
+  document.querySelectorAll('.pkg-card').forEach(function(c){ c.classList.remove('sel'); });
+  el.classList.add('sel');
+  S.pkg = { price: parseInt(el.dataset.price), name: el.dataset.name, adtype: el.dataset.adtype };
+  calc(); checkS2();
+}
+function togAddon(el){
+  el.classList.toggle('sel');
+  var p=parseInt(el.dataset.price), n=el.dataset.name;
+  var i=S.addons.findIndex(function(a){return a.name===n;});
+  if(i>=0) S.addons.splice(i,1); else S.addons.push({name:n,price:p});
+  calc();
+}
+function selDur(el){
+  document.querySelectorAll('.dur-btn').forEach(function(b){b.classList.remove('sel');});
+  el.classList.add('sel');
+  S.months=parseInt(el.dataset.m); S.discount=parseInt(el.dataset.d);
+  calc(); checkS2();
+}
+function calc(){
+  if(!S.pkg||!S.months) return;
+  S.baseMonthly = S.pkg.price + S.addons.reduce(function(s,a){return s+a.price;},0);
+  S.total = Math.round(S.baseMonthly * S.months * (1 - S.discount/100));
+}
+function checkS2(){
+  document.getElementById('btnS2').disabled = !(S.pkg && S.months);
+}
+
+// ===== 파일 업로드 =====
+function addFiles(files){
+  Array.from(files).forEach(function(f){
+    if(f.size > 10*1024*1024){ alert(f.name+' 파일이 10MB를 초과합니다.'); return; }
+    if(S.files.find(function(x){return x.name===f.name;})) return;
+    S.files.push(f);
+  });
+  renderFiles();
+  document.getElementById('fileInput').value='';
+}
+function dropFiles(e){
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag');
+  addFiles(e.dataTransfer.files);
+}
+function delFile(name){
+  S.files = S.files.filter(function(f){return f.name!==name;});
+  renderFiles();
+}
+function renderFiles(){
+  var html='';
+  S.files.forEach(function(f){
+    var kb = f.size < 1024*1024 ? Math.round(f.size/1024)+'KB' : (f.size/1024/1024).toFixed(1)+'MB';
+    html += '<div class="file-item">'
+          + '<span style="font-size:16px;">&#x1f4c4;</span>'
+          + '<span class="file-name">'+f.name+'</span>'
+          + '<span class="file-size">'+kb+'</span>'
+          + '<button class="file-del" onclick="delFile(\''+f.name.replace(/'/g,"\\'")+'\')">✕</button>'
+          + '</div>';
+  });
+  document.getElementById('fileList').innerHTML = html;
+}
+
+// ===== STEP 3: 견적서 =====
+function renderQuote(){
+  calc();
+  document.getElementById('q-company').textContent = document.getElementById('customerName').value;
+  document.getElementById('q-contact').textContent = document.getElementById('contact').value + (document.getElementById('position').value?' ('+document.getElementById('position').value+')':'');
+  document.getElementById('q-phone').textContent = document.getElementById('phone').value;
+  document.getElementById('q-term').textContent = S.months+'개월'+(S.discount>0?' ('+S.discount+'% 할인 적용)':'');
+  var sd = document.getElementById('startDate').value;
+  document.getElementById('q-start').textContent = sd || '미정';
+  var discAmt = Math.round(S.baseMonthly * S.months * S.discount/100);
+  var rows = '<div class="quote-row"><span class="ql">'+S.pkg.name+'</span><span class="qr">$'+S.pkg.price.toLocaleString()+' / 월</span></div>';
+  S.addons.forEach(function(a){
+    rows += '<div class="quote-row"><span class="ql">+ '+a.name+'</span><span class="qr">+$'+a.price+'</span></div>';
+  });
+  rows += '<div class="quote-row"><span class="ql">월 소계</span><span class="qr">$'+S.baseMonthly.toLocaleString()+'</span></div>';
+  if(S.discount>0) rows += '<div class="quote-row"><span class="ql">장기 할인 <span class="disc-badge">-'+S.discount+'%</span></span><span class="qr" style="color:var(--brand);">- $'+discAmt.toLocaleString()+'</span></div>';
+  document.getElementById('q-items').innerHTML = rows;
+  document.getElementById('q-total').textContent = '$'+S.total.toLocaleString()+' USD';
+  var now = new Date();
+  document.getElementById('quoteNo').innerHTML = '견적번호: XCV-'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'-'+Math.floor(Math.random()*900+100)+'<br />작성일: '+now.toLocaleDateString('ko-KR');
+}
+
+// ===== STEP 4: 최종 견적 =====
+function renderFinalEstimate(){
+  var discAmt = Math.round(S.baseMonthly * S.months * S.discount/100);
+  var html = '';
+  html += '<div class="est-row"><span>'+S.pkg.name+'</span><span>$'+S.pkg.price.toLocaleString()+'/월</span></div>';
+  S.addons.forEach(function(a){ html+='<div class="est-row"><span>+ '+a.name+'</span><span>$'+a.price+'</span></div>'; });
+  html += '<div class="est-row"><span>집행 기간</span><span>'+S.months+'개월</span></div>';
+  if(S.discount>0) html+='<div class="est-row"><span>장기 할인 <span class="disc-badge">-'+S.discount+'%</span></span><span style="color:var(--brand);">-$'+discAmt.toLocaleString()+'</span></div>';
+  html += '<div class="est-total"><span class="est-total-label">최종 견적</span><span class="est-total-val">$'+S.total.toLocaleString()+' USD</span></div>';
+  document.getElementById('finalEstimate').innerHTML = html;
+}
+
+// ===== 세무 정보 토글 =====
+function togTax(){
+  var chk = document.getElementById('taxChk');
+  chk.checked = !chk.checked;
+  document.getElementById('taxFields').classList.toggle('show', chk.checked);
+}
+
+// ===== 제출 =====
+async function submitForm(){
+  var errEl = document.getElementById('errMsg');
+  errEl.classList.add('hidden');
+  if(!document.getElementById('consent').checked){
+    errEl.textContent='개인정보 수집에 동의해주세요.';
+    errEl.classList.remove('hidden'); return;
+  }
+  var taxChk = document.getElementById('taxChk').checked;
+  if(taxChk){
+    if(!document.getElementById('bizNo').value.trim()
+      ||!document.getElementById('bizName').value.trim()
+      ||!document.getElementById('bizCeo').value.trim()
+      ||!document.getElementById('bizAddr').value.trim()
+      ||!document.getElementById('taxEmail').value.trim()){
+      errEl.textContent='세금계산서 발행 정보를 모두 입력해주세요.';
+      errEl.classList.remove('hidden'); return;
+    }
+  }
+  var btn = document.getElementById('btnSubmit');
+  btn.disabled=true; btn.textContent='제출 중...';
+
+  var taxInfo = '';
+  if(taxChk){
+    taxInfo = '\n\n[세금계산서 정보]\n'
+      +'사업자번호: '+document.getElementById('bizNo').value+'\n'
+      +'상호: '+document.getElementById('bizName').value+'\n'
+      +'대표자: '+document.getElementById('bizCeo').value+'\n'
+      +'업태/종목: '+document.getElementById('bizType').value+'\n'
+      +'주소: '+document.getElementById('bizAddr').value+'\n'
+      +'수신이메일: '+document.getElementById('taxEmail').value;
+  }
+  var fileNames = S.files.length ? '\n\n[첨부 파일]\n'+S.files.map(function(f){return f.name;}).join(', ') : '';
+  var addonNames = S.addons.length ? S.addons.map(function(a){return a.name;}).join(', ') : '';
+
+  var data = {
+    date:         new Date().toISOString().split('T')[0],
+    customerName: document.getElementById('customerName').value,
+    contact:      document.getElementById('contact').value,
+    position:     document.getElementById('position').value,
+    phone:        document.getElementById('phone').value,
+    email:        document.getElementById('email').value,
+    adType:       S.pkg.name,
+    size:         addonNames || '-',
+    startDate:    document.getElementById('startDate').value,
+    vol:          '',
+    term:         S.months+'개월'+(S.discount>0?' (-'+S.discount+'%)':''),
+    remark:       '견적금액: $'+S.total.toLocaleString()+' USD'
+                  +'\n월소계: $'+S.baseMonthly.toLocaleString()+'/월'
+                  +'\n기간: '+S.months+'개월'
+                  +(document.getElementById('remark').value ? '\n\n[요청사항]\n'+document.getElementById('remark').value : '')
+                  +(document.getElementById('companyInfo').value ? '\n\n[회사소개]\n'+document.getElementById('companyInfo').value : '')
+                  +(document.getElementById('companyWeb').value ? '\n웹사이트: '+document.getElementById('companyWeb').value : '')
+                  +(document.getElementById('companySns').value ? '\nSNS: '+document.getElementById('companySns').value : '')
+                  +(document.getElementById('companyAddr').value ? '\n주소: '+document.getElementById('companyAddr').value : '')
+                  +(document.getElementById('companyTarget').value ? '\n타깃: '+document.getElementById('companyTarget').value : '')
+                  +taxInfo
+                  +fileNames,
+    source:       'ONLINE',
+  };
+
+  fetch(GAS_URL, {
+    method:'POST', mode:'no-cors',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  }).catch(function(){});
+
+  var now = new Date();
+  var refNo = 'XCV-'+now.getFullYear()+(now.getMonth()+1).toString().padStart(2,'0')+now.getDate().toString().padStart(2,'0')+'-'+Math.floor(Math.random()*900+100);
+  document.getElementById('doneRef').textContent = '접수번호: '+refNo;
+  goStep(5);
+}
+
+// ===== URL 파라미터 자동 선택 (챗봇 연동) =====
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var pkg    = params.get('pkg');
+  var months = params.get('months');
+  var addons = params.get('addons');
+
+  if (!pkg && !months && !addons) return;
+
+  // 안내 메시지 삽입 (Step1 최상단)
+  var step1 = document.getElementById('step1');
+  if (step1) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'background:#fff5f5;border:1.5px solid #d32f2f;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:14px;color:#b71c1c;font-weight:600;line-height:1.6;';
+    banner.textContent = '챗봇 추천 패키지가 선택되었습니다. 기본 정보를 입력 후 다음으로 진행하세요.';
+    step1.insertBefore(banner, step1.firstChild);
+  }
+
+  // pkg 자동 선택
+  if (pkg) {
+    var pkgName = decodeURIComponent(pkg);
+    document.querySelectorAll('.pkg-card').forEach(function(card) {
+      if (card.dataset.name === pkgName) selPkg(card);
+    });
+  }
+
+  // months 자동 선택
+  if (months) {
+    var m = parseInt(months, 10);
+    document.querySelectorAll('.dur-btn').forEach(function(btn) {
+      if (parseInt(btn.dataset.m, 10) === m) selDur(btn);
+    });
+  }
+
+  // addons 자동 선택 (쉼표 구분, URL 디코딩)
+  if (addons) {
+    var addonList = addons.split(',').map(function(a) { return decodeURIComponent(a.trim()); });
+    document.querySelectorAll('.addon-item').forEach(function(item) {
+      if (addonList.indexOf(item.dataset.name) !== -1) togAddon(item);
+    });
+  }
+})();
+</script>
+</body>
+</html>
