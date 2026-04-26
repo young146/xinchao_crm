@@ -563,6 +563,7 @@
       this.isOpen = true;
       this.win.classList.remove('xv-hidden');
       this.badge.classList.remove('show');
+      this.fabLabel.classList.add('xv-label-hidden');
       this.fab.setAttribute('aria-label', '씬짜오베트남 광고 안내 챗봇 닫기');
       setTimeout(() => this.inputEl.focus(), 250);
       this._scrollToBottom();
@@ -571,6 +572,7 @@
     close() {
       this.isOpen = false;
       this.win.classList.add('xv-hidden');
+      this.fabLabel.classList.remove('xv-label-hidden');
       this.fab.setAttribute('aria-label', '씬짜오베트남 광고 안내 챗봇 열기');
     }
 
@@ -579,10 +581,6 @@
       this._appendBotMessage(GREETING, null, true);
       // 처음엔 닫혀있으므로 뱃지 표시
       this.badge.classList.add('show');
-      // 5초 후 라벨 숨기기
-      setTimeout(() => {
-        this.fabLabel.classList.add('xv-label-hidden');
-      }, 5000);
     }
 
     /* 추천 질문 클릭 전송 */
