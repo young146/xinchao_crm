@@ -18,7 +18,7 @@
   const API_URL = (SCRIPT_TAG && SCRIPT_TAG.getAttribute('data-api-url'))
     || '/api/chat';
 
-  const GREETING = '안녕하세요! 씬짜오베트남 광고에 대해 궁금한 점을 물어보세요. 예산, 목적, 타깃에 맞는 최적의 광고 패키지를 추천해 드릴게요.';
+  const GREETING = '안녕하세요! 무엇을 도와드릴까요? 아래 질문을 선택하거나 자유롭게 물어보세요.';
 
   /* ── CSS ────────────────────────────────────────────────── */
   const CSS = `
@@ -32,10 +32,6 @@
 
     /* 플로팅 버튼 */
     #xv-fab {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 2147483640;
       width: 56px;
       height: 56px;
       border-radius: 50%;
@@ -48,6 +44,7 @@
       box-shadow: 0 4px 16px rgba(211,47,47,0.45), 0 2px 6px rgba(0,0,0,0.2);
       transition: transform 0.18s ease, box-shadow 0.18s ease;
       outline: none;
+      position: relative;
     }
     #xv-fab:hover {
       transform: scale(1.08);
@@ -332,6 +329,73 @@
       text-align: center;
     }
 
+    /* FAB 라벨 */
+    #xv-fab-wrapper {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 2147483640;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-direction: row-reverse;
+    }
+    #xv-fab {
+      position: static;
+      z-index: auto;
+      flex-shrink: 0;
+    }
+    #xv-fab-label {
+      background: #fff;
+      color: #d32f2f;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.4s ease;
+    }
+    #xv-fab-label.xv-label-hidden {
+      opacity: 0;
+    }
+
+    /* 추천 질문 버튼 */
+    #xv-suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 0 2px;
+    }
+    .xv-sug-btn {
+      flex: 1 1 calc(50% - 4px);
+      min-width: 120px;
+      background: #fff;
+      color: #d32f2f;
+      border: 1.5px solid #d32f2f;
+      border-radius: 20px;
+      padding: 7px 12px;
+      font-size: 12.5px;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      line-height: 1.4;
+      transition: background 0.15s, color 0.15s;
+      word-break: keep-all;
+    }
+    .xv-sug-btn:hover {
+      background: #d32f2f;
+      color: #fff;
+    }
+    .xv-sug-btn:active {
+      background: #b71c1c;
+      color: #fff;
+    }
+
     /* 모바일 반응형 */
     @media (max-width: 480px) {
       #xv-window {
@@ -344,7 +408,7 @@
       #xv-window.xv-hidden {
         transform: translateY(100%) !important;
       }
-      #xv-fab {
+      #xv-fab-wrapper {
         bottom: 16px;
         right: 16px;
       }
@@ -391,6 +455,7 @@
       this.messages = []; // { role, content }
       this.isOpen = false;
       this.isLoading = false;
+      this.suggestionsEl = null;
       this._buildDOM();
       this._bindEvents();
       this._showGreeting();
@@ -410,6 +475,10 @@
       style.textContent = CSS;
       this.shadow.appendChild(style);
 
+      /* FAB 버튼 래퍼 */
+      this.fabWrapper = document.createElement('div');
+      this.fabWrapper.id = 'xv-fab-wrapper';
+
       /* FAB 버튼 */
       this.fab = document.createElement('button');
       this.fab.id = 'xv-fab';
@@ -419,6 +488,14 @@
       this.badge = document.createElement('div');
       this.badge.id = 'xv-badge';
       this.fab.appendChild(this.badge);
+
+      /* FAB 라벨 */
+      this.fabLabel = document.createElement('div');
+      this.fabLabel.id = 'xv-fab-label';
+      this.fabLabel.textContent = '씬짜오 광고 컨설팅';
+
+      this.fabWrapper.appendChild(this.fabLabel);
+      this.fabWrapper.appendChild(this.fab);
 
       /* 채팅창 */
       this.win = document.createElement('div');
@@ -445,7 +522,7 @@
       `;
 
       this.shadow.appendChild(this.win);
-      this.shadow.appendChild(this.fab);
+      this.shadow.appendChild(this.fabWrapper);
 
       // 자주 참조하는 요소
       this.messagesEl = this.shadow.getElementById('xv-messages');
@@ -499,15 +576,37 @@
 
     /* 인사 메시지 */
     _showGreeting() {
-      this._appendBotMessage(GREETING);
+      this._appendBotMessage(GREETING, null, true);
       // 처음엔 닫혀있으므로 뱃지 표시
       this.badge.classList.add('show');
+      // 5초 후 라벨 숨기기
+      setTimeout(() => {
+        this.fabLabel.classList.add('xv-label-hidden');
+      }, 5000);
+    }
+
+    /* 추천 질문 클릭 전송 */
+    _sendSuggestion(text) {
+      // 추천 질문 영역 즉시 제거
+      if (this.suggestionsEl) {
+        this.suggestionsEl.remove();
+        this.suggestionsEl = null;
+      }
+      // 입력창에 텍스트 세팅 후 전송
+      this.inputEl.value = text;
+      this._handleSend();
     }
 
     /* 메시지 전송 처리 */
     async _handleSend() {
       const text = this.inputEl.value.trim();
       if (!text || this.isLoading) return;
+
+      // 추천 질문 영역 제거 (직접 입력 시에도)
+      if (this.suggestionsEl) {
+        this.suggestionsEl.remove();
+        this.suggestionsEl = null;
+      }
 
       // 사용자 메시지 추가
       this._appendUserMessage(text);
@@ -571,7 +670,7 @@
       this._scrollToBottom();
     }
 
-    _appendBotMessage(text, recommendation) {
+    _appendBotMessage(text, recommendation, showSuggestions) {
       const row = document.createElement('div');
       row.className = 'xv-msg-row xv-bot';
 
@@ -615,6 +714,29 @@
         <span class="xv-time">${timeNow()}</span>
       `;
       this.messagesEl.appendChild(row);
+
+      // 추천 질문 버튼 (첫 인사말에만)
+      if (showSuggestions) {
+        const suggestions = [
+          '광고 패키지 종류가 궁금해요',
+          '우리 업종에 맞는 광고는?',
+          '광고 비용이 얼마인가요?',
+          '온라인 광고만 할 수 있나요?',
+        ];
+        this.suggestionsEl = document.createElement('div');
+        this.suggestionsEl.id = 'xv-suggestions';
+        suggestions.forEach(q => {
+          const btn = document.createElement('button');
+          btn.className = 'xv-sug-btn';
+          btn.textContent = q;
+          btn.addEventListener('click', () => {
+            this._sendSuggestion(q);
+          });
+          this.suggestionsEl.appendChild(btn);
+        });
+        this.messagesEl.appendChild(this.suggestionsEl);
+      }
+
       this._scrollToBottom();
 
       // 창이 닫혀있으면 뱃지
