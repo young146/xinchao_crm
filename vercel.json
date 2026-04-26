@@ -19,6 +19,14 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/chatbot-widget\\.js",
+      "dest": "/chatbot-widget.js"
+    },
+    {
+      "src": "/chatbot-test\\.html",
+      "dest": "/chatbot-test.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
