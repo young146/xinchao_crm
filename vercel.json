@@ -1,34 +1,8 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
-    },
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/chatbot-widget\\.js",
-      "dest": "/chatbot-widget.js"
-    },
-    {
-      "src": "/chatbot-test\\.html",
-      "dest": "/chatbot-test.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/chatbot-widget.js", "destination": "/chatbot-widget.js" },
+    { "source": "/chatbot-test.html", "destination": "/chatbot-test.html" },
+    { "source": "/((?!api|chatbot).*)", "destination": "/index.html" }
   ]
 }
