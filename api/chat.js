@@ -283,7 +283,7 @@ module.exports = async function handler(req, res) {
   const openai = new OpenAI({ apiKey });
 
   try {
-    const completion = await openai.chat.completions.create({
+    const stream = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -291,19 +291,23 @@ module.exports = async function handler(req, res) {
       ],
       max_tokens: 1024,
       temperature: 0.7,
+      stream: true,
     });
 
-    const rawContent = completion.choices[0]?.message?.content || "";
-    const { reply, recommendation } = parseRecommendation(rawContent);
+    // 스트리밍을 위한 헤더 설정
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.status(200);
 
-    const response = { reply };
-    if (recommendation) response.recommendation = recommendation;
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || "";
+      if (content) {
+        res.write(content);
+      }
+    }
 
-    // 디버그 로그 (Vercel 함수 로그에서 확인 가능)
-    if (sessionId) console.log(`[chat] sessionId=${sessionId}`);
-    console.log(`[chat] reply length=${reply.length}, hasRec=${!!recommendation}`);
-
-    return res.status(200).json(response);
+    if (sessionId) console.log(`[chat] sessionId=${sessionId} streaming completed`);
+    return res.end();
   } catch (err) {
     console.error("[chat] OpenAI error:", err?.message || err);
 

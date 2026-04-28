@@ -362,6 +362,11 @@
       opacity: 0;
     }
 
+    /* 대화창이 열렸을 때 플로팅 아이콘 숨김 (메시지 가림 방지) */
+    :host(.xv-is-open) #xv-fab-wrapper {
+      display: none;
+    }
+
     /* 추천 질문 버튼 */
     #xv-suggestions {
       display: flex;
@@ -561,6 +566,7 @@
 
     open() {
       this.isOpen = true;
+      this.host.classList.add('xv-is-open');
       this.win.classList.remove('xv-hidden');
       this.badge.classList.remove('show');
       this.fabLabel.classList.add('xv-label-hidden');
@@ -571,6 +577,7 @@
 
     close() {
       this.isOpen = false;
+      this.host.classList.remove('xv-is-open');
       this.win.classList.add('xv-hidden');
       this.fabLabel.classList.remove('xv-label-hidden');
       this.fab.setAttribute('aria-label', '씬짜오베트남 광고 안내 챗봇 열기');
@@ -630,19 +637,101 @@
           throw new Error(err.error || `서버 오류 (${res.status})`);
         }
 
-        const data = await res.json();
-        const reply = data.reply || '응답을 받지 못했습니다.';
-        const recommendation = data.recommendation || null;
-
         // 타이핑 인디케이터 제거
         typingEl.remove();
 
-        // 봇 응답 추가
-        this._appendBotMessage(reply, recommendation);
-        this.messages.push({ role: 'assistant', content: reply });
+        // 스트리밍 읽기 준비
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+
+        // 봇 응답용 빈 버블 생성
+        const row = document.createElement('div');
+        row.className = 'xv-msg-row xv-bot';
+        row.innerHTML = `
+          <div class="xv-bot-avatar">${ICON_BOT}</div>
+          <div>
+            <div class="xv-bubble"></div>
+            <div class="xv-rec-container"></div>
+          </div>
+          <span class="xv-time">${timeNow()}</span>
+        `;
+        this.messagesEl.appendChild(row);
+        const bubble = row.querySelector('.xv-bubble');
+        const recContainer = row.querySelector('.xv-rec-container');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          fullContent += chunk;
+
+          // 추천 JSON 마커 확인
+          const marker = "RECOMMENDATION_JSON:";
+          const markerIdx = fullContent.indexOf(marker);
+
+          let displayContent = fullContent;
+          if (markerIdx !== -1) {
+            displayContent = fullContent.slice(0, markerIdx).trim();
+          }
+
+          bubble.innerHTML = renderMarkdown(displayContent);
+          this._scrollToBottom();
+        }
+
+        // 최종 파싱 및 추천 카드 처리
+        const marker = "RECOMMENDATION_JSON:";
+        const markerIdx = fullContent.indexOf(marker);
+        let finalReply = fullContent;
+        let recommendation = null;
+
+        if (markerIdx !== -1) {
+          finalReply = fullContent.slice(0, markerIdx).trim();
+          const jsonStr = fullContent.slice(markerIdx + marker.length).trim();
+          try {
+            recommendation = JSON.parse(jsonStr);
+          } catch (e) {
+            console.error('Recommendation JSON parse error:', e);
+          }
+        }
+
+        if (recommendation) {
+          // 추천 카드 렌더링 (기존 _appendBotMessage의 로직 참고)
+          const pkg = escapeHtml(recommendation.packageName || '');
+          const months = parseInt(recommendation.months, 10) || 1;
+          const addons = Array.isArray(recommendation.addons) ? recommendation.addons : [];
+          const addonsStr = addons.map(a => escapeHtml(a)).join(', ');
+          const params = new URLSearchParams({
+            pkg: recommendation.packageName || '',
+            months: String(months),
+          });
+          if (addons.length > 0) {
+            params.set('addons', addons.join(','));
+          }
+          const applyUrl = '/ads_request?' + params.toString();
+          const detailText = months > 1
+            ? `${months}개월 계약${addons.length > 0 ? ' · ' + addonsStr : ''}`
+            : addons.length > 0 ? addonsStr : '';
+
+          recContainer.innerHTML = `
+            <div class="xv-rec-card">
+              <div class="xv-rec-label">추천 패키지</div>
+              <div class="xv-rec-pkg">${pkg}</div>
+              ${detailText ? `<div class="xv-rec-detail">${detailText}</div>` : ''}
+              <button class="xv-rec-btn" onclick="window.location.href='${applyUrl}'">
+                ${ICON_APPLY}
+                광고 신청하기
+              </button>
+            </div>
+          `;
+          this._scrollToBottom();
+        }
+
+        this.messages.push({ role: 'assistant', content: finalReply });
 
       } catch (err) {
-        typingEl.remove();
+        if (typingEl && typingEl.parentNode) typingEl.remove();
         this._appendErrorMessage(err.message || '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
       } finally {
         this._setLoading(false);
