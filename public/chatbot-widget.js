@@ -29,6 +29,9 @@
       line-height: 1.5;
       color: #1a1a1a;
     }
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
 
     /* 플로팅 버튼 */
     #xv-fab {
@@ -74,6 +77,7 @@
       right: 24px;
       z-index: 2147483639;
       width: 400px;
+      max-width: calc(100% - 48px);
       height: 520px;
       border-radius: 16px;
       background: #fff;
@@ -280,9 +284,11 @@
       align-items: flex-end;
       gap: 8px;
       flex-shrink: 0;
+      min-width: 0;
     }
     #xv-input {
       flex: 1;
+      min-width: 0;
       border: 1.5px solid #e8e8e8;
       border-radius: 12px;
       padding: 9px 13px;
@@ -406,9 +412,11 @@
       #xv-window {
         bottom: 0 !important;
         right: 0 !important;
-        width: 100vw !important;
+        width: 100% !important;
+        max-width: 100% !important;
         height: 100dvh !important;
         border-radius: 0 !important;
+        overflow-x: hidden;
       }
       #xv-window.xv-hidden {
         transform: translateY(100%) !important;
