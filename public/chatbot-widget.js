@@ -274,6 +274,8 @@
     .xv-rec-btn:hover { background: #b71c1c; }
     .xv-rec-btn:active { transform: scale(0.97); }
     .xv-rec-btn svg { width: 14px; height: 14px; fill: #fff; }
+    .xv-rec-btn-quote { background: #fff; color: #d32f2f; border: 1.5px solid #d32f2f; margin-top: 6px; }
+    .xv-rec-btn-quote:hover { background: #fff5f5; }
 
     /* 입력 영역 */
     #xv-input-area {
@@ -722,6 +724,9 @@
             ? `${months}개월 계약${addons.length > 0 ? ' · ' + addonsStr : ''}`
             : addons.length > 0 ? addonsStr : '';
 
+          const quoteAddons = addons;
+          const quoteMonths = months;
+          const quotePkg = recommendation.packageName || '';
           recContainer.innerHTML = `
             <div class="xv-rec-card">
               <div class="xv-rec-label">추천 패키지</div>
@@ -731,8 +736,14 @@
                 ${ICON_APPLY}
                 광고 신청하기
               </button>
+              <button class="xv-rec-btn xv-rec-btn-quote" id="xv-quote-btn-stream">
+                📄 견적서 받기
+              </button>
             </div>
           `;
+          recContainer.querySelector('#xv-quote-btn-stream').addEventListener('click', () => {
+            this._generateQuote(quotePkg, quoteMonths, quoteAddons);
+          });
           this._scrollToBottom();
         }
 
@@ -787,6 +798,9 @@
           ? `${months}개월 계약${addons.length > 0 ? ' · ' + addonsStr : ''}`
           : addons.length > 0 ? addonsStr : '';
 
+        const _quotePkg = recommendation.packageName || '';
+        const _quoteMonths = months;
+        const _quoteAddons = addons;
         recHtml = `
           <div class="xv-rec-card">
             <div class="xv-rec-label">추천 패키지</div>
@@ -795,6 +809,9 @@
             <button class="xv-rec-btn" onclick="window.location.href='${applyUrl}'">
               ${ICON_APPLY}
               광고 신청하기
+            </button>
+            <button class="xv-rec-btn xv-rec-btn-quote" data-pkg="${escapeHtml(_quotePkg)}" data-months="${_quoteMonths}" data-addons="${escapeHtml(_quoteAddons.join('||'))}">
+              📄 견적서 받기
             </button>
           </div>
         `;
@@ -809,6 +826,16 @@
         <span class="xv-time">${timeNow()}</span>
       `;
       this.messagesEl.appendChild(row);
+
+      const quoteBtn = row.querySelector('.xv-rec-btn-quote');
+      if (quoteBtn) {
+        quoteBtn.addEventListener('click', () => {
+          const p = quoteBtn.dataset.pkg;
+          const m = parseInt(quoteBtn.dataset.months, 10) || 1;
+          const a = quoteBtn.dataset.addons ? quoteBtn.dataset.addons.split('||').filter(Boolean) : [];
+          this._generateQuote(p, m, a);
+        });
+      }
 
       // 추천 질문 버튼 (첫 인사말에만)
       if (showSuggestions) {
@@ -866,6 +893,133 @@
       requestAnimationFrame(() => {
         this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
       });
+    }
+
+    _generateQuote(packageName, months, addons) {
+      const PRICES = {
+        '디지털 스타터': 250,
+        '디지털 프리미엄': 350,
+        '디지털 베스트': 500,
+        '통합 패키지 A': 1050,
+        '통합 패키지 B': 1150,
+        '통합 패키지 C': 1250,
+        '프리미엄 올인원': 3000,
+      };
+      const DISCOUNTS = { 3: 5, 6: 10, 12: 15 };
+
+      const basePrice = PRICES[packageName] || 0;
+      const discountRate = DISCOUNTS[months] || 0;
+      const addonTotal = addons.reduce((sum, a) => {
+        const m = a.match(/\$([0-9,]+)/);
+        return sum + (m ? parseInt(m[1].replace(',', ''), 10) : 0);
+      }, 0);
+      const subtotal = (basePrice + addonTotal) * months;
+      const discountAmt = Math.round(subtotal * discountRate / 100);
+      const total = subtotal - discountAmt;
+
+      const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+      const addonsHtml = addons.length > 0
+        ? addons.map(a => {
+            const m = a.match(/\$([0-9,]+)/);
+            const p = m ? parseInt(m[1].replace(',', ''), 10) : 0;
+            return `<tr><td>${a}</td><td class="num">$${p.toLocaleString()}/월</td><td class="num">$${(p * months).toLocaleString()}</td></tr>`;
+          }).join('')
+        : '';
+
+      const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>씬짜오베트남 광고 견적서</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; color: #222; background: #fff; padding: 40px; max-width: 700px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #d32f2f; padding-bottom: 16px; margin-bottom: 28px; }
+  .brand { font-size: 22px; font-weight: 700; color: #d32f2f; }
+  .brand-sub { font-size: 12px; color: #666; margin-top: 4px; }
+  .doc-info { text-align: right; font-size: 13px; color: #555; line-height: 1.8; }
+  h2 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 28px; letter-spacing: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+  th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; }
+  td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .highlight { background: #fff8f8; font-weight: 600; }
+  .total-row td { border-top: 2px solid #d32f2f; font-size: 16px; font-weight: 700; color: #d32f2f; padding: 12px; }
+  .discount-row td { color: #e53935; }
+  .notice { margin-top: 32px; padding: 14px 16px; background: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px; font-size: 13px; color: #555; line-height: 1.7; }
+  .notice strong { color: #e65100; display: block; margin-bottom: 4px; font-size: 14px; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #888; text-align: center; line-height: 2; }
+  @media print {
+    body { padding: 20px; }
+    .no-print { display: none; }
+    @page { margin: 15mm; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="brand">씬짜오베트남 (Xin Chao Vietnam)</div>
+    <div class="brand-sub">베트남 한인사회 대표 교민 미디어 · 창간 2002</div>
+  </div>
+  <div class="doc-info">
+    <div><strong>광고 견적서</strong></div>
+    <div>발행일: ${today}</div>
+    <div>담당: info@chaovietnam.co.kr</div>
+    <div>전화: 079-283-2000</div>
+  </div>
+</div>
+
+<h2>광 고 견 적 서</h2>
+
+<table>
+  <thead>
+    <tr><th>항목</th><th>단가 (월)</th><th>금액 (${months}개월)</th></tr>
+  </thead>
+  <tbody>
+    <tr class="highlight">
+      <td>${packageName}</td>
+      <td class="num">$${basePrice.toLocaleString()}/월</td>
+      <td class="num">$${(basePrice * months).toLocaleString()}</td>
+    </tr>
+    ${addonsHtml}
+    <tr>
+      <td colspan="2" style="text-align:right; color:#555;">소계 (${months}개월)</td>
+      <td class="num">$${subtotal.toLocaleString()}</td>
+    </tr>
+    ${discountRate > 0 ? `
+    <tr class="discount-row">
+      <td colspan="2" style="text-align:right;">장기 계약 할인 (${months}개월 · ${discountRate}%)</td>
+      <td class="num">-$${discountAmt.toLocaleString()}</td>
+    </tr>` : ''}
+    <tr class="total-row">
+      <td colspan="2" style="text-align:right;">최종 합계</td>
+      <td class="num">$${total.toLocaleString()}</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="notice">
+  <strong>⚠ 참고용 견적 안내</strong>
+  이 견적서는 1차 참고용 견적서입니다. 정식 견적서는 영업부의 검토를 거쳐 재발행됩니다.<br>
+  실제 계약 금액은 광고 소재 구성, 게재 일정, 협의 조건에 따라 달라질 수 있습니다.
+</div>
+
+<div class="footer">
+  chaovietnam.co.kr · info@chaovietnam.co.kr · Tel. 079-283-2000<br>
+  가격은 USD 기준이며, 실제 결제는 베트남 동(VND) 환산 지불 / 세금계산서 발행 가능
+</div>
+
+<div class="no-print" style="text-align:center; margin-top: 32px;">
+  <button onclick="window.print()" style="padding:10px 28px; background:#d32f2f; color:#fff; border:none; border-radius:6px; font-size:15px; cursor:pointer; font-family:inherit;">🖨 인쇄 / PDF 저장</button>
+</div>
+</body>
+</html>`;
+
+      const w = window.open('', '_blank', 'width=750,height=900');
+      w.document.write(html);
+      w.document.close();
     }
   }
 
