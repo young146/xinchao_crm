@@ -1,4 +1,16 @@
 import React, { useState, useEffect } from "react";
+import { parsePhoneNumbers, parseVolumeRange, parsePrice } from "../utils/dataTransformer";
+import {
+  getContractStatus,
+  getPaymentStatus,
+  getContractProgress,
+  getNextAction,
+} from "../utils/contractStatus";
+import {
+  getContractDates,
+  getVolumeRangeDates,
+  formatDateSimple,
+} from "../utils/volumeSchedule";
 
 /**
  * 고객 상세 카드 (모달)
@@ -391,19 +403,6 @@ const SheetCustomerCard = ({ customer, onClose, onSave }) => {
 // ──────────────────────────────────────────────────────────────────────────────
 // 기존 정산 시트 기반 카드 (legacy mode) - 기존 CustomerCard 로직
 // ──────────────────────────────────────────────────────────────────────────────
-import { parsePhoneNumbers, parseVolumeRange, parsePrice } from "../utils/dataTransformer";
-import {
-  getContractStatus,
-  getPaymentStatus,
-  getContractProgress,
-  getNextAction,
-} from "../utils/contractStatus";
-import {
-  getContractDates,
-  getVolumeRangeDates,
-  formatDateSimple,
-} from "../utils/volumeSchedule";
-
 const LegacyCustomerCard = ({ customer, onClose }) => {
   useEffect(() => {
     const handleKey = (e) => {
