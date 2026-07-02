@@ -29,3 +29,6 @@ yarn-error.log*
 # 민감 데이터 (고객 DB·이메일 원본) — 절대 push 금지
 exports/
 all_files.txt
+
+# 에디터 개인설정 (PC마다 경로 다름 — 레포에 넣지 않음)
+*.code-workspace
